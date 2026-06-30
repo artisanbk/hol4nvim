@@ -6,11 +6,16 @@
 
 local M = {}
 
+-- Reshape selections into proof-manager calls (the "what to send" layer).
+local transform = require("holnvim.transform")
+
 -- Config which can be overwritten at `init.lua` setup()
 M.config = {
 	hol_cmd = nil, -- explicit path / command to run
 	split = "vertical",
 	start_insert = false, -- enter vim insert mode after opening
+	transport = "auto", -- "auto" | "terminal" | "fifo": how send() delivers
+	fifo = nil, -- explicit fifo path; else $VIMHOL_FIFO, else $HOLDIR default
 }
 
 -- Stack of { buf = <bufnr>, job = <chan id>, pipe = <fifo path> }.
@@ -74,12 +79,12 @@ end
   entry that `send()` can try to write to.
 --]]
 local function prune(remove_job)
-	for job_id, session in ipairs(M.sessions) do
+	for idx, session in ipairs(M.sessions) do
 		if session.job == remove_job then
 			if session.pipe then
 				pcall(vim.uv.fs_unlink, session.pipe)
 			end
-			table.remove(M.sessions, job_id)
+			table.remove(M.sessions, idx)
 			return
 		end
 	end
@@ -170,40 +175,152 @@ M.open = function()
 end
 
 --[[
-  Send raw text to current session (no ";\n" appended) via chansend() into
-  the STDIN end of that channel; We use send_line() for the additional ";\n"
-  This is a port of `HOLREPLsend`;
+  Terminal transport: write the statement into the session's pty via
+  chansend(). Appends "\n" -- the Enter keypress that submits the line. The ";"
+  statement terminator is already added by the gatherers below.
+  Port of HOLREPLsend's nvim branch (hol.vim:337).
 --]]
+local function terminal_send(session, text)
+	vim.fn.chansend(session.job, text .. "\n")
+end
+
 M.send = function(text)
-	local s = M.current()
-	if not s then
+	local mode = M.config.transport or "auto"
+	local session = M.current()
+	if mode ~= "fifo" and session then
+		-- terminal transport (in-vim REPL)
+		terminal_send(session, text)
+	elseif mode ~= "terminal" then
+		-- fifo transport (external HOL tailing the pipe). Lazy-require breaks
+		-- the load-time cycle between repl and fifo.
+		local fifo = require("holnvim.fifo")
+		if fifo.ready() then
+			fifo.send(text)
+		else
+			vim.notify(
+				"holnvim: no in-vim REPL and no fifo reader\
+        (start one with the open keymap, or launch a Vimhol HOL session)",
+				vim.log.levels.WARN
+			)
+		end
+	else
 		vim.notify(
-			"holnvim: no active hol repl (open one with :HolStart)",
+			"holnvim: transport=terminal but no in-VIM REPL",
 			vim.log.levels.WARN
 		)
-		return
 	end
-	vim.fn.chansend(s.job, text)
 end
 
 --[[
-  line / selection helpers (appends ";\n")
+  Text gatherers. current_line() / visual_selection() collect buffer text.
+  There is no robust direct call for the visual selection, so we yank it into
+  the unnamed register `"` (saving/restoring it) and read it back.
 --]]
-M.send_line = function()
-	M.send(vim.api.nvim_get_current_line() .. ";\n")
+local function current_line()
+	return vim.api.nvim_get_current_line()
 end
 
---[[
-  There is no robust way to get selected visual mode text from vim;
-  The solve is to copy in into the unnamed register `"` and read it from there;
---]]
-M.send_visual = function()
+local function visual_selection()
 	local save_reg = vim.fn.getreg('"')
 	local save_type = vim.fn.getregtype('"')
 	vim.cmd("noautocmd silent normal! gvy")
 	local text = vim.fn.getreg('"')
 	vim.fn.setreg('"', save_reg, save_type)
-	M.send(text .. ";\n")
+	return text
+end
+
+--[[
+  Senders. Each collects text, optionally reshapes it via a transform, appends
+  the ";" terminator, and routes through send(). The ";" is required by the
+  terminal transport (to submit the statement) and harmless for the fifo one.
+    s -> raw SML            e -> apply selection as a tactic (expand)
+--]]
+M.send_line = function()
+	M.send(current_line() .. ";")
+end
+
+M.send_visual = function()
+	M.send(visual_selection() .. ";")
+end
+
+M.send_expand_line = function()
+	M.send(transform.expand(current_line()) .. ";")
+end
+
+M.send_expand_visual = function()
+	M.send(transform.expand(visual_selection()) .. ";")
+end
+
+--[[
+  load: process `load`s for a selected script header (port of HOLLoad,
+  hol.vim:59-83). Runs holdeptool over the selection to discover the theory
+  dependencies, then sends `val _ = load"..."` for each, so those modules are
+  available in the session -- after which `open`s and goals on them work.
+--]]
+
+-- Resolve holdeptool.exe: next to the chosen hol, else under $HOLDIR/bin.
+local function holdeptool()
+	local hol = M.which_hol()
+	if hol ~= "" then
+		local tool = vim.fn.fnamemodify(hol, ":h") .. "/holdeptool.exe"
+		if vim.fn.executable(tool) == 1 then
+			return tool
+		end
+	end
+	local holdir = vim.env.HOLDIR
+	if holdir and holdir ~= "" then
+		local tool = holdir .. "/bin/holdeptool.exe"
+		if vim.fn.executable(tool) == 1 then
+			return tool
+		end
+	end
+	return ""
+end
+
+local function send_load(text)
+	local tool = holdeptool()
+	if tool == "" then
+		vim.notify(
+			"holnvim: holdeptool.exe not found (set $HOLDIR)",
+			vim.log.levels.ERROR
+		)
+		return
+	end
+
+	-- holdeptool analyses a file, so write the selected header to a temp file.
+	local tmp = vim.fn.tempname()
+	vim.fn.writefile(vim.split(text, "\n", { plain = true }), tmp)
+
+	-- One dependency per output line -> one load statement each.
+	local deps = vim.fn.systemlist({ tool, tmp })
+	if vim.v.shell_error ~= 0 then
+		vim.notify(
+			"holnvim: holdeptool failed:\n" .. table.concat(deps, "\n"),
+			vim.log.levels.ERROR
+		)
+		return
+	end
+
+	local loads = {}
+	for _, dep in ipairs(deps) do
+		if dep ~= "" then
+			table.insert(loads, 'val _ = load"' .. dep .. '";')
+		end
+	end
+	if #loads == 0 then
+		vim.notify("holnvim: no dependencies to load", vim.log.levels.INFO)
+		return
+	end
+
+	M.send(table.concat(loads, "\n"))
+end
+
+M.send_load_line = function()
+	send_load(current_line())
+end
+
+M.send_load_visual = function()
+	send_load(visual_selection())
 end
 
 --[[
