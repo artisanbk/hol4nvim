@@ -1,5 +1,6 @@
 --[[
-  This file is the pre-buffer setup for HOL4 script files
+  Per-buffer setup for HOL4 script files. Runs on every hol4script buffer.
+  Keymaps live in lua/holnvim/keymaps.lua; buffer-local options belong here.
 --]]
 
 --[[
@@ -11,27 +12,15 @@ if vim.b.did_ftplugin then
 end
 
 vim.b.did_ftplugin = true
-local repl = require("holnvim.repl")
+
+require("holnvim.keymaps").attach()
+require("holnvim.abbrev").attach() -- no-op unless config.abbreviations
 
 --[[
-  KEYMAPS FOR HOL4
+  Highlighting (ROADMAP Phase 5): prefer the tree-sitter holscript parser
+  when it has been built (5b, `make parsers`); vim.treesitter.start disables
+  regex syntax for the buffer itself. Until then the pcall fails silently
+  and the regex port (syntax/hol4script.vim, 5a) loads as usual.
 --]]
-
-if repl.config.keymaps ~= false then
-	local prefix = repl.config.prefix or "<localleader>"
-	local function map(mode, lhs, rhs, desc)
-		vim.keymap.set(mode, prefix .. lhs, rhs, {
-			buffer = true,
-			silent = true,
-			desc = desc,
-		})
-	end
-	map("n", "x", repl.open, "HOL4: Start REPL")
-	map("n", "X", repl.close, "HOL4: Close REPL")
-	map("n", "s", repl.send_line, "HOL4: Send current line")
-	map("x", "s", repl.send_visual, "HOL4: Send selection")
-	map("n", "e", repl.send_expand_line, "HOL4: Expand tactic (current line)")
-	map("x", "e", repl.send_expand_visual, "HOL4: Expand tactic (selection)")
-	map("n", "l", repl.send_load_line, "HOL4: Load deps (current line)")
-	map("x", "l", repl.send_load_visual, "HOL4: Load deps (selection)")
-end
+pcall(vim.treesitter.language.register, "holscript", "hol4script")
+pcall(vim.treesitter.start, 0, "holscript")

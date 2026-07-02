@@ -1,0 +1,8 @@
+# HOL build artifacts, in case a demo's export_theory()/Holmake runs in examples/
+examples/*Theory.sig
+examples/*Theory.sml
+examples/*Theory.dat
+examples/.HOLMK/
+examples/*.uo
+examples/*.ui
+examples/.hol/

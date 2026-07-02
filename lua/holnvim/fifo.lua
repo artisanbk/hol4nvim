@@ -57,9 +57,12 @@ end
 
   Opening and closing a write end is exactly what every real send does, so a
   Vimhol tail reader handles the probe the same way it handles a normal write.
+
+  `path` defaults to the configured/global fifo; pass a session's own pipe to
+  probe an in-vim REPL's Vimhol reader.
 --]]
-M.ready = function()
-	local path = M.path()
+M.ready = function(path)
+	path = path or M.path()
 	if not path then
 		return false
 	end
@@ -76,10 +79,12 @@ end
 
 --[[
   Deliver a ";"-terminated statement to the HOL session. Writes it to a temp
-  file, then pokes the pipe with the file's name for Vimhol to use.
+  file, then pokes the pipe with the file's name for Vimhol to use. `path`
+  defaults to the configured/global fifo; pass a session pipe to target an
+  in-vim REPL.
 --]]
-M.send = function(text)
-	local path = M.path()
+M.send = function(text, path)
+	path = path or M.path()
 	if not path then
 		vim.notify(
 			"holnvim: no fifo path (set config.fifo, $VIMHOL_FIFO, or $HOLDIR)",

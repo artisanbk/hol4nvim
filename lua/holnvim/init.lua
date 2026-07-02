@@ -25,6 +25,17 @@ local function create_commands()
 			repl.send_line()
 		end
 	end, { range = true, desc = "Send current line / selection to HOL4 REPL" })
+
+	vim.api.nvim_create_user_command("HolSendDocument", function()
+		repl.send_document()
+	end, { desc = "Send whole buffer to HOL4 REPL (open lines dropped)" })
+
+	vim.api.nvim_create_user_command("HolUnabbrev", function(cmd)
+		require("holnvim.abbrev").unabbrev(cmd.line1, cmd.line2)
+	end, {
+		range = "%",
+		desc = "Replace HOL unicode with ASCII (whole buffer, or a range)",
+	})
 end
 
 --[[

@@ -16,6 +16,7 @@ M.config = {
 	start_insert = false, -- enter vim insert mode after opening
 	transport = "auto", -- "auto" | "terminal" | "fifo": how send() delivers
 	fifo = nil, -- explicit fifo path; else $VIMHOL_FIFO, else $HOLDIR default
+	abbreviations = false, -- ASCII->unicode insert abbreviations (holabs)
 }
 
 -- Stack of { buf = <bufnr>, job = <chan id>, pipe = <fifo path> }.
@@ -175,16 +176,90 @@ M.open = function()
 end
 
 --[[
-  Terminal transport: write the statement into the session's pty via
-  chansend(). Appends "\n" -- the Enter keypress that submits the line. The ";"
-  statement terminator is already added by the gatherers below.
+  Terminal transport. Single lines go into the session's pty via chansend()
+  ("\n" is the Enter that submits; the ";" terminator is already appended).
   Port of HOLREPLsend's nvim branch (hol.vim:337).
+
+  Multi-line batches instead go through the session's OWN Vimhol pipe when a
+  reader is attached (repl.open exports VIMHOL_FIFO; a hol-config that use's
+  vimhol.sml tails it): hol then QUse.use's a temp Script file, giving real
+  script-file parsing. Fed raw into the pty, a batch glues statements that
+  lack ";" and can wedge hol's filter at its '#' prompt mid-construct.
+  Without a Vimhol reader we fall back to the pty and hope for the best.
 --]]
 local function terminal_send(session, text)
+	if text:find("\n") and session.pipe then
+		local fifo = require("holnvim.fifo")
+		if fifo.ready(session.pipe) then
+			fifo.send(text, session.pipe)
+			return
+		end
+	end
 	vim.fn.chansend(session.job, text .. "\n")
 end
 
+--[[
+  Guard against wedging the REPL: a script-file block construct (Theorem,
+  Definition, ...) sent without its closing keyword leaves hol's filter
+  waiting on the `#` continuation prompt, and the NEXT send gets eaten as
+  continuation of the broken construct (Ctrl-C in the terminal recovers).
+  Typical cause: a charwise visual selection stopping short of the closer.
+  Returns the missing closer's keyword, or nil if the text looks complete.
+--]]
+local blocks = {
+	{ opener = "^Theorem%f[%A]", closer = "^QED%f[%W]", name = "QED" },
+	{ opener = "^Triviality%f[%A]", closer = "^QED%f[%W]", name = "QED" },
+	{ opener = "^Definition%f[%A]", closer = "^End%f[%W]", name = "End" },
+	{ opener = "^Datatype%f[%A]", closer = "^End%f[%W]", name = "End" },
+	{ opener = "^Inductive%f[%A]", closer = "^End%f[%W]", name = "End" },
+	{ opener = "^CoInductive%f[%A]", closer = "^End%f[%W]", name = "End" },
+}
+
+local function missing_closer(text)
+	local pending = nil
+	for line in (text .. "\n"):gmatch("(.-)\n") do
+		if pending then
+			if line:find(pending.closer) then
+				pending = nil
+			end
+		else
+			for _, block in ipairs(blocks) do
+				if line:find(block.opener) then
+					pending = block
+					break
+				end
+			end
+		end
+	end
+	return pending and pending.name
+end
+
 M.send = function(text)
+	local missing = missing_closer(text)
+	if missing then
+		-- a last line like "Q" or "QE" means a charwise (v) selection swept
+		-- onto the closer's line but stopped short of its end
+		local last = text:gsub("[;%s]*$", ""):match("([^\n]*)$") or ""
+		local hint = ""
+		if #last > 0 and #last < #missing and missing:sub(1, #last) == last then
+			hint = " The selection ends with '"
+				.. last
+				.. "' -- a charwise (v) selection stopped short of the full '"
+				.. missing
+				.. "'."
+		end
+		vim.notify(
+			"holnvim: not sent -- incomplete block, no closing '"
+				.. missing
+				.. "' in the selection."
+				.. hint
+				.. " (Sending it would wedge the REPL at its '#' prompt;"
+				.. " select the whole block linewise with V.)",
+			vim.log.levels.WARN
+		)
+		return
+	end
+
 	local mode = M.config.transport or "auto"
 	local session = M.current()
 	if mode ~= "fifo" and session then
@@ -213,20 +288,36 @@ end
 
 --[[
   Text gatherers. current_line() / visual_selection() collect buffer text.
-  There is no robust direct call for the visual selection, so we yank it into
-  the unnamed register `"` (saving/restoring it) and read it back.
+
+  The keymaps invoke visual_selection() while visual mode is still ACTIVE
+  (Lua callbacks, unlike upstream's ":call" maps, do not leave visual mode
+  first), so the live selection must be read with getregion() -- a gv-based
+  reselect would grab the PREVIOUS selection's stale marks and send garbage.
+  The register fallback stays for mark-based flows (e.g. :'<,'>HolSend).
 --]]
 local function current_line()
 	return vim.api.nvim_get_current_line()
 end
 
 local function visual_selection()
+	local mode = vim.fn.mode()
+	if mode == "v" or mode == "V" or mode == "\22" then
+		local lines =
+			vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = mode })
+		-- leave visual mode synchronously (sets '< '>), as upstream's
+		-- ":call" maps do implicitly
+		vim.cmd("normal! \27")
+		return table.concat(lines, "\n")
+	end
+
+	-- not in visual mode: reselect the last selection via the unnamed
+	-- register (saving/restoring it)
 	local save_reg = vim.fn.getreg('"')
 	local save_type = vim.fn.getregtype('"')
 	vim.cmd("noautocmd silent normal! gvy")
 	local text = vim.fn.getreg('"')
 	vim.fn.setreg('"', save_reg, save_type)
-	return text
+	return (text:gsub("\n$", "")) -- linewise yank: drop the trailing newline
 end
 
 --[[
@@ -234,22 +325,99 @@ end
   the ";" terminator, and routes through send(). The ";" is required by the
   terminal transport (to submit the statement) and harmless for the fifo one.
     s -> raw SML            e -> apply selection as a tactic (expand)
+    g -> set goal           S -> subgoal
+    F -> suffices           P -> pattern goal
 --]]
-M.send_line = function()
-	M.send(current_line() .. ";")
+-- Shared by all senders: strip comments, refusing text whose comments never
+-- close (an unclosed '(*' swallows everything after it -- including a QED --
+-- both here and in hol's own nesting lexer). Returns nil when refused.
+local function stripped_or_warn(raw)
+	local text, unclosed = transform.strip_comments(raw)
+	if unclosed then
+		vim.notify(
+			"holnvim: not sent -- unclosed comment: a '(*' on line "
+				.. unclosed
+				.. " of the selection has no matching '*)'. SML comments"
+				.. " nest, so every '(*' inside a comment needs its own '*)'.",
+			vim.log.levels.WARN
+		)
+		return nil
+	end
+	if not text:find("%S") then
+		vim.notify(
+			"holnvim: nothing to send (only comments/whitespace)",
+			vim.log.levels.INFO
+		)
+		return nil
+	end
+	return text
 end
 
-M.send_visual = function()
-	M.send(visual_selection() .. ";")
+local function senders(reshape)
+	local function sender(gather)
+		return function()
+			local text = stripped_or_warn(gather())
+			if not text then
+				return
+			end
+			M.send((reshape and reshape(text) or text) .. ";")
+		end
+	end
+	return sender(current_line), sender(visual_selection)
 end
 
-M.send_expand_line = function()
-	M.send(transform.expand(current_line()) .. ";")
+--[[
+  send_document: send the entire buffer as one batch (no upstream
+  equivalent; mapped to \! and :HolSendDocument). `open` declarations are
+  dropped: in an interactive session, `open` of a theory that is not loaded
+  yet fails -- use the load keymap (\l) over the open lines first instead.
+  An `open` may span lines; it is taken to continue over nonblank lines of
+  bare identifiers, ending at one that carries a ";".
+--]]
+local function without_opens(lines)
+	local kept, i = {}, 1
+	while i <= #lines do
+		local line = lines[i]
+		if line:find("^%s*open%f[%W]") then
+			local ended = line:find(";") ~= nil
+			i = i + 1
+			while not ended and i <= #lines do
+				local cont = lines[i]
+				if cont:find("%S") and cont:find("^[%s%w_.;']*$") then
+					ended = cont:find(";") ~= nil
+					i = i + 1
+				else
+					ended = true
+				end
+			end
+		else
+			kept[#kept + 1] = line
+			i = i + 1
+		end
+	end
+	return kept
 end
 
-M.send_expand_visual = function()
-	M.send(transform.expand(visual_selection()) .. ";")
+M.send_document = function()
+	if vim.fn.mode():match("[vV\22]") then
+		vim.cmd("normal! \27") -- \! pressed from visual mode: leave it
+	end
+	local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+	local text = stripped_or_warn(table.concat(without_opens(lines), "\n"))
+	if not text then
+		return
+	end
+	M.send(text .. ";")
 end
+
+M.send_line, M.send_visual = senders(nil)
+M.send_quiet_line, M.send_quiet_visual = senders(transform.quiet)
+M.send_expand_line, M.send_expand_visual = senders(transform.expand)
+M.send_goal_line, M.send_goal_visual = senders(transform.goal)
+M.send_uqgoal_line, M.send_uqgoal_visual = senders(transform.uqgoal)
+M.send_subgoal_line, M.send_subgoal_visual = senders(transform.subgoal)
+M.send_suffices_line, M.send_suffices_visual = senders(transform.suffices)
+M.send_pattern_line, M.send_pattern_visual = senders(transform.pattern)
 
 --[[
   load: process `load`s for a selected script header (port of HOLLoad,
@@ -278,6 +446,11 @@ local function holdeptool()
 end
 
 local function send_load(text)
+	text = stripped_or_warn(text)
+	if not text then
+		return
+	end
+
 	local tool = holdeptool()
 	if tool == "" then
 		vim.notify(
@@ -301,10 +474,11 @@ local function send_load(text)
 		return
 	end
 
-	local loads = {}
+	local loads, names = {}, {}
 	for _, dep in ipairs(deps) do
 		if dep ~= "" then
 			table.insert(loads, 'val _ = load"' .. dep .. '";')
+			table.insert(names, dep)
 		end
 	end
 	if #loads == 0 then
@@ -312,7 +486,18 @@ local function send_load(text)
 		return
 	end
 
-	M.send(table.concat(loads, "\n"))
+	--[[
+	  Full HOLLoad shape (hol.vim:69-83): the loads, then the SELECTION
+	  ITSELF executed inside quietdec toggles (so an `open`'s binding dump
+	  is suppressed), then a "...completed" confirmation print.
+	--]]
+	M.send(table.concat({
+		table.concat(loads, " "),
+		transform.quiet(text) .. ";",
+		'val _ = print "HOLLoad '
+			.. table.concat(names, " ")
+			.. ' completed\\n";',
+	}, "\n"))
 end
 
 M.send_load_line = function()
@@ -321,6 +506,83 @@ end
 
 M.send_load_visual = function()
 	send_load(visual_selection())
+end
+
+--[[
+  Proof-manager control commands (port of hol.vim:195-273). Thin literal
+  proofManagerLib calls through send(). `count` defaults to the keymap's
+  v:count1: it REPEATS backup/restore/drop (upstream HOLRepeat -- 3\b backs
+  up three steps) and is rotate's argument (upstream HOLRotate).
+--]]
+local function repeated(stmt)
+	return function(count)
+		local n = count or vim.v.count1
+		local parts = {}
+		for _ = 1, n do
+			parts[#parts + 1] = stmt
+		end
+		M.send(table.concat(parts, " "))
+	end
+end
+
+M.backup = repeated("proofManagerLib.backup();")
+M.restore = repeated("proofManagerLib.restore();")
+M.drop = repeated("proofManagerLib.drop();")
+
+M.save = function()
+	M.send("proofManagerLib.save();")
+end
+
+M.p = function()
+	M.send("proofManagerLib.p();")
+end
+
+M.restart = function()
+	M.send("proofManagerLib.restart();")
+end
+
+M.rotate = function(count)
+	M.send("proofManagerLib.rotate(" .. (count or vim.v.count1) .. ");")
+end
+
+--[[
+  Display toggles (port of the \y and \n mappings, hol.vim:272-273).
+--]]
+M.toggle_types = function()
+	M.send("Globals.show_types := not (!Globals.show_types);")
+end
+
+M.toggle_unicode = function()
+	M.send(
+		'Feedback.set_trace "PP.avoid_unicode"'
+			.. ' (1 - Feedback.current_trace "PP.avoid_unicode");'
+	)
+end
+
+--[[
+  Interrupt the running tactic (port of HOLINT, hol.vim:207-211). Vimhol's
+  poller reacts to a literal "Interrupt" line on the fifo by interrupting
+  its proof thread -- this cannot go through send(), which would only queue
+  more input behind the busy evaluator. Priority: the session's own pipe,
+  then the global fifo (external session), then CTRL-C into the pty (the
+  line discipline turns it into SIGINT, which PolyML takes as Interrupt).
+--]]
+M.interrupt = function()
+	local fifo = require("holnvim.fifo")
+	local session = M.current()
+	if session and session.pipe and fifo.ready(session.pipe) then
+		vim.fn.writefile({ "Interrupt" }, session.pipe, "a")
+		return
+	end
+	if fifo.ready() then
+		vim.fn.writefile({ "Interrupt" }, fifo.path(), "a")
+		return
+	end
+	if session then
+		vim.fn.chansend(session.job, "\3") -- CTRL-C
+		return
+	end
+	vim.notify("holnvim: no HOL session to interrupt", vim.log.levels.WARN)
 end
 
 --[[

@@ -12,7 +12,7 @@
 -- Leaders must be set before any plugin/keymap loads. <localleader> drives the
 -- HOL keymaps; with "\\" the bindings are \x \X \s \e. Change to taste.
 vim.g.mapleader = " "
-vim.g.maplocalleader = "\\"
+vim.g.maplocalleader = " "
 
 -- Bootstrap lazy.nvim (clone on first run).
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
@@ -40,6 +40,7 @@ require("lazy").setup({
 		-- before the *Script.sml argument is opened.
 		config = function()
 			require("holnvim").setup({
+				abbreviations = true, -- holabs ASCII->unicode (off by default)
 				-- transport = "auto",   -- "terminal" | "fifo"
 				-- hol_cmd = "/path/to/bin/hol",
 				-- split = "vertical",   -- "horizontal"
