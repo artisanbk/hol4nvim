@@ -294,10 +294,14 @@ t.check(
 )
 repl_for_guard.send = ctl_saved_send
 
--- interrupt with no session and no fifo reader: warns, does not write
+-- interrupt with no session and no fifo reader: warns, does not write.
+-- hol_cmd is pinned to a nonexistent binary so fifo.path cannot derive this
+-- machine's real HOL root (and reach a live global fifo) via $PATH.
 do
 	local save_fifo_env2, save_holdir2 = vim.env.VIMHOL_FIFO, vim.env.HOLDIR
+	local save_hol_cmd2 = repl_for_guard.config.hol_cmd
 	vim.env.VIMHOL_FIFO, vim.env.HOLDIR = nil, nil
+	repl_for_guard.config.hol_cmd = "/nonexistent/hol"
 	notes = {}
 	repl_for_guard.interrupt()
 	t.check(
@@ -305,16 +309,103 @@ do
 		#notes > 0 and notes[#notes]:find("no HOL session") ~= nil
 	)
 	vim.env.VIMHOL_FIFO, vim.env.HOLDIR = save_fifo_env2, save_holdir2
+	repl_for_guard.config.hol_cmd = save_hol_cmd2
 end
 
 vim.notify = saved_notify
 repl_for_guard.config.transport = saved_transport
 
--- fifo.path resolution priority: config > $VIMHOL_FIFO > $HOLDIR default
+-- holdir() resolution priority: config.holdir > derived from the hol
+-- binary (through $PATH and symlinks, requiring bin/ + a tools/ sibling)
+-- > $HOLDIR. Uses a fake HOL tree so the tier stays HOL-free.
 local repl = require("holnvim.repl")
 local fifo = require("holnvim.fifo")
 local save_fifo_env, save_holdir = vim.env.VIMHOL_FIFO, vim.env.HOLDIR
+local save_hol_cmd, save_cfg_holdir = repl.config.hol_cmd, repl.config.holdir
+local save_cfg_vimhol = repl.config.vimhol
 
+local fake_root = vim.fn.tempname()
+vim.fn.mkdir(fake_root .. "/bin", "p")
+vim.fn.mkdir(fake_root .. "/tools", "p")
+vim.fn.writefile({ "#!/bin/sh" }, fake_root .. "/bin/hol")
+vim.uv.fs_chmod(fake_root .. "/bin/hol", 493) -- 0755
+local real_root = vim.uv.fs_realpath(fake_root)
+
+repl.config.hol_cmd = fake_root .. "/bin/hol"
+repl.config.holdir = "/explicit/holdir"
+vim.env.HOLDIR = "/env/holdir"
+t.check("holdir prefers config.holdir", repl.holdir() == "/explicit/holdir")
+
+repl.config.holdir = nil
+t.check(
+	"holdir derives from the hol binary over $HOLDIR",
+	repl.holdir() == real_root
+)
+
+local link_dir = vim.fn.tempname()
+vim.fn.mkdir(link_dir, "p")
+vim.uv.fs_symlink(fake_root .. "/bin/hol", link_dir .. "/hol")
+repl.config.hol_cmd = link_dir .. "/hol"
+t.check("holdir resolves a symlinked hol", repl.holdir() == real_root)
+
+local flat_dir = vim.fn.tempname() -- hol not under a bin/: no derivation
+vim.fn.mkdir(flat_dir, "p")
+vim.fn.writefile({ "#!/bin/sh" }, flat_dir .. "/hol")
+vim.uv.fs_chmod(flat_dir .. "/hol", 493)
+repl.config.hol_cmd = flat_dir .. "/hol"
+t.check(
+	"holdir falls back to $HOLDIR when hol is not under bin/",
+	repl.holdir() == "/env/holdir"
+)
+
+local bare_root = vim.fn.tempname() -- bin/hol but no tools/: not a HOL tree
+vim.fn.mkdir(bare_root .. "/bin", "p")
+vim.fn.writefile({ "#!/bin/sh" }, bare_root .. "/bin/hol")
+vim.uv.fs_chmod(bare_root .. "/bin/hol", 493)
+repl.config.hol_cmd = bare_root .. "/bin/hol"
+t.check(
+	"holdir falls back to $HOLDIR without a tools/ sibling",
+	repl.holdir() == "/env/holdir"
+)
+
+repl.config.hol_cmd = "/nonexistent/hol"
+vim.env.HOLDIR = nil
+t.check("holdir nil when nothing resolves", repl.holdir() == nil)
+
+-- vimhol_sml() (7a bootstrap discovery): false disables, a string is an
+-- explicit file, true discovers under holdir() (current then pre-rename
+-- layout), nil when nothing resolves
+repl.config.vimhol = false
+t.check("vimhol_sml nil when disabled", repl.vimhol_sml() == nil)
+
+repl.config.vimhol = "/my/vimhol.sml"
+t.check("vimhol_sml honours explicit path", repl.vimhol_sml() == "/my/vimhol.sml")
+
+repl.config.vimhol = true
+vim.fn.mkdir(fake_root .. "/tools/editor-modes/vim", "p")
+vim.fn.writefile({ "(* fake *)" }, fake_root .. "/tools/editor-modes/vim/vimhol.sml")
+repl.config.hol_cmd = fake_root .. "/bin/hol"
+t.check(
+	"vimhol_sml discovered under holdir",
+	repl.vimhol_sml() == real_root .. "/tools/editor-modes/vim/vimhol.sml"
+)
+
+local old_root = vim.fn.tempname() -- pre-rename tree: tools/vim/vimhol.sml
+vim.fn.mkdir(old_root .. "/bin", "p")
+vim.fn.mkdir(old_root .. "/tools/vim", "p")
+vim.fn.writefile({ "#!/bin/sh" }, old_root .. "/bin/hol")
+vim.uv.fs_chmod(old_root .. "/bin/hol", 493)
+vim.fn.writefile({ "(* fake *)" }, old_root .. "/tools/vim/vimhol.sml")
+repl.config.hol_cmd = old_root .. "/bin/hol"
+t.check(
+	"vimhol_sml falls back to the pre-rename layout",
+	repl.vimhol_sml() == vim.uv.fs_realpath(old_root) .. "/tools/vim/vimhol.sml"
+)
+
+repl.config.hol_cmd = "/nonexistent/hol"
+t.check("vimhol_sml nil when nothing resolves", repl.vimhol_sml() == nil)
+
+-- fifo.path resolution priority: config > $VIMHOL_FIFO > the holdir default
 repl.config.fifo = "/explicit/fifo"
 vim.env.VIMHOL_FIFO = "/env/fifo"
 vim.env.HOLDIR = "/holdir"
@@ -325,14 +416,83 @@ t.check("fifo.path falls back to $VIMHOL_FIFO", fifo.path() == "/env/fifo")
 
 vim.env.VIMHOL_FIFO = nil
 t.check(
-	"fifo.path falls back to $HOLDIR",
+	"fifo.path falls back to the resolved holdir ($HOLDIR here)",
 	fifo.path() == "/holdir/tools/editor-modes/vim/fifo"
 )
 
+repl.config.hol_cmd = fake_root .. "/bin/hol"
+t.check(
+	"fifo.path uses the derived holdir over $HOLDIR",
+	fifo.path() == real_root .. "/tools/editor-modes/vim/fifo"
+)
+
+repl.config.hol_cmd = "/nonexistent/hol"
 vim.env.HOLDIR = nil
 t.check("fifo.path nil when nothing set", fifo.path() == nil)
 
+-- external_recipe() (7c): actionable no-reader guidance. Creates the fifo
+-- so the pasted recipe finds a working pipe; names the env line and the
+-- guarded use (or a placeholder when vimhol.sml is unresolvable).
+t.check(
+	"recipe explains when no fifo path resolves",
+	repl.external_recipe():find("set config.fifo or config.holdir") ~= nil
+)
+
+local recipe_fifo = vim.fn.tempname()
+repl.config.fifo = recipe_fifo
+repl.config.vimhol = "/my/vimhol.sml"
+local recipe = repl.external_recipe()
+t.check(
+	"recipe names the fifo env line",
+	recipe:find("VIMHOL_FIFO='" .. recipe_fifo .. "' hol", 1, true) ~= nil
+)
+t.check(
+	"recipe pastes the guarded use",
+	recipe:find('NONE => use "/my/vimhol.sml"', 1, true) ~= nil
+)
+local recipe_stat = vim.uv.fs_stat(recipe_fifo)
+t.check(
+	"recipe created the fifo",
+	recipe_stat ~= nil and recipe_stat.type == "fifo"
+)
+t.check("fifo.ensure tolerates an existing fifo", fifo.ensure(recipe_fifo))
+
+repl.config.vimhol = false
+t.check(
+	"recipe falls back to a use placeholder",
+	repl.external_recipe():find("<HOLDIR>", 1, true) ~= nil
+)
+
+local not_a_fifo = vim.fn.tempname()
+vim.fn.writefile({ "" }, not_a_fifo)
+repl.config.fifo = not_a_fifo
+t.check(
+	"recipe flags a non-fifo in the way",
+	repl.external_recipe():find("is not a fifo") ~= nil
+)
+
+-- send() with no session and no reader warns with the recipe (the created
+-- fifo above has no reader, so ready() is false and nothing blocks)
+do
+	repl.config.fifo = recipe_fifo
+	local recipe_notify, warned = vim.notify, nil
+	vim.notify = function(msg)
+		warned = msg
+	end
+	repl.send("val recipe_probe = 1;")
+	vim.notify = recipe_notify
+	t.check(
+		"no-reader send warns with the recipe",
+		warned ~= nil
+			and warned:find("no fifo reader") ~= nil
+			and warned:find("VIMHOL_FIFO", 1, true) ~= nil
+	)
+end
+repl.config.fifo = nil
+
 vim.env.VIMHOL_FIFO, vim.env.HOLDIR = save_fifo_env, save_holdir
+repl.config.hol_cmd, repl.config.holdir = save_hol_cmd, save_cfg_holdir
+repl.config.vimhol = save_cfg_vimhol
 
 -- ftplugin: buffer-local keymaps appear on a hol4script buffer, under
 -- whatever <localleader> init.lua sets (do not assume backslash)

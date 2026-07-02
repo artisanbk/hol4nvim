@@ -27,13 +27,15 @@ end
   Resolve the fifo path, in priority order:
     1. config.fifo (explicit override)
     2. $VIMHOL_FIFO (shared with the HOL session's environment)
-    3. $HOLDIR/tools/editor-modes/vim/fifo (upstream default)
+    3. <holdir>/tools/editor-modes/vim/fifo (upstream default), with the
+       HOL root from repl.holdir() (config.holdir -> derived from the hol
+       binary -> $HOLDIR)
   Returns nil if none is determinable.
 --]]
 M.path = function()
-	local cfg = require("holnvim.repl").config
-	if cfg.fifo and cfg.fifo ~= "" then
-		return cfg.fifo
+	local repl = require("holnvim.repl")
+	if repl.config.fifo and repl.config.fifo ~= "" then
+		return repl.config.fifo
 	end
 
 	local env = vim.env.VIMHOL_FIFO
@@ -41,12 +43,28 @@ M.path = function()
 		return env
 	end
 
-	local holdir = vim.env.HOLDIR
-	if holdir and holdir ~= "" then
+	local holdir = repl.holdir()
+	if holdir then
 		return holdir .. "/tools/editor-modes/vim/fifo"
 	end
 
 	return nil
+end
+
+--[[
+  Make sure `path` exists as a fifo, creating it if absent -- so a pasted
+  external-session recipe (repl.external_recipe) finds a working pipe, and
+  repl.open gets its per-session pipe. vimhol.sml also creates the fifo
+  when missing; both sides tolerate it already existing. Returns false when
+  the path exists (or ends up) as something other than a fifo.
+--]]
+M.ensure = function(path)
+	local st = vim.uv.fs_stat(path)
+	if not st then
+		vim.system({ "mkfifo", path }):wait()
+		st = vim.uv.fs_stat(path)
+	end
+	return st ~= nil and st.type == "fifo"
 end
 
 --[[
@@ -87,7 +105,7 @@ M.send = function(text, path)
 	path = path or M.path()
 	if not path then
 		vim.notify(
-			"holnvim: no fifo path (set config.fifo, $VIMHOL_FIFO, or $HOLDIR)",
+			"holnvim: no fifo path (set config.fifo or config.holdir)",
 			vim.log.levels.ERROR
 		)
 		return

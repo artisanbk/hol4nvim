@@ -15,11 +15,17 @@ See [ROADMAP.md](ROADMAP.md) for parity status with the upstream vim config.
       -- defaults shown; all optional
       hol_cmd = nil,          -- explicit hol binary; else .HOLMK/lastmaker,
                               -- then $HOLDIR/bin/hol, then hol on $PATH
+      holdir = nil,           -- HOL installation root; else derived from the
+                              -- hol binary being run, else $HOLDIR. Used for
+                              -- holdeptool (\l) and the default fifo path
       split = "vertical",     -- REPL window: "vertical" | "horizontal"
       start_insert = false,   -- focus the REPL in insert mode after \x
       transport = "auto",     -- "auto" | "terminal" | "fifo"
       fifo = nil,             -- fifo path; else $VIMHOL_FIFO, else
-                              -- $HOLDIR/tools/editor-modes/vim/fifo
+                              -- <holdir>/tools/editor-modes/vim/fifo
+      vimhol = true,          -- auto-load vimhol.sml into REPLs started by
+                              -- \x (skipped if your hol-config already does;
+                              -- false disables, or give an explicit path)
       keymaps = true,         -- false disables all buffer-local keymaps
       prefix = "<localleader>", -- keymap prefix
       abbreviations = false,  -- holabs ASCII->unicode insert abbreviations
@@ -29,8 +35,15 @@ See [ROADMAP.md](ROADMAP.md) for parity status with the upstream vim config.
 ```
 
 `transport = "auto"` sends to the in-vim `:terminal` REPL if one is open,
-otherwise to an external HOL session tailing the Vimhol fifo (start one with
-`vimhol.sh`, or `use "vimhol.sml"` in your `~/.hol-config.sml`).
+otherwise to an external HOL session tailing the Vimhol fifo. If no reader
+is attached, the warning names the fifo and the exact recipe to start one
+(`VIMHOL_FIFO='<path>' hol` plus a guarded `use` of vimhol.sml to paste into
+it) — and creates the fifo, so the pasted command finds a working pipe.
+
+REPLs started by `\x` get Vimhol loaded automatically — no `~/.hol-config.sml`
+needed. The bootstrap is a guarded `use`: if your hol-config (or `$HOL_CONFIG`)
+already loads Vimhol it does nothing, and it announces itself with a
+`holnvim: vimhol ready` line once the session can take fifo-routed sends.
 
 ## Keymaps
 

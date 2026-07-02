@@ -206,24 +206,86 @@ straight off the plugin's runtimepath).
 
 ### Phase 7 --- Out-of-the-box setup (standalone goal)
 
-Upstream vimhol makes the user hand-wire things outside the editor: a
-`~/.hol-config.sml` that `use`s `vimhol.sml`, `$HOLDIR`/PATH environment
-plumbing, and the global fifo. All of that should live inside the plugin ---
-a fresh user adds the lazy spec, points it at their HOL installation if it
-is not discoverable, and everything works.
+Upstream vimhol makes the user hand-wire things outside the editor. Full
+audit of those requirements and their holnvim disposition:
 
--   [ ] Auto-bootstrap Vimhol into spawned REPLs: after `\x`, the plugin
-    itself sends `use "<HOLDIR>/tools/editor-modes/vim/vimhol.sml";`
-    (quietly) instead of requiring a hand-edited `~/.hol-config.sml`.
-    Config: `vimhol = true | false | "/path/to/vimhol.sml"`. Without it the
-    pipe transport, `\c` interrupt, and robust multi-line sends silently
-    lose their preferred path today.
--   [ ] Audit every remaining out-of-editor requirement and either automate
-    it or surface it as a documented `setup()` option --- nothing may ask
-    the user to edit dotfiles or export environment variables. Candidates:
-    `hol_cmd`/`holdir` option superseding `$HOLDIR`, fifo path, and a
-    `:checkhealth holnvim` (Phase 6) that names the exact missing option
-    when discovery fails.
+| Upstream asks you to hand-wire | holnvim | Status |
+|---|---|---|
+| `~/.hol-config.sml` that `use`s `vimhol.sml` (enables the fifo protocol: pipe transport, `\c` interrupt, robust multi-line sends) | 7a auto-bootstrap at `\x` | ✅ |
+| `$HOLDIR` environment variable (holdeptool for `\l`, default fifo path, vimhol.sml location) | 7b `holdir()` resolver + `holdir` option | ✅ |
+| `hol` on `$PATH` | `hol_cmd` / lastmaker / `$HOLDIR` discovery chain | ✅ (Phase 0) |
+| copy `filetype.vim` into `~/.vim` | `ftdetect/` ships in-plugin | ✅ (Phase 0) |
+| copy `hol4script.vim` into `~/.vim/syntax` | `syntax/` ships in-plugin | ✅ (5a) |
+| source `holabs.vim` by hand | `abbreviations = true` | ✅ (Phase 4) |
+| `vimhol.sh` (tmux + rlwrap + per-pair fifo plumbing) | subsumed by `\x`: in-vim `:terminal` + per-session pipe | ✅ |
+| `$VIMHOL_FIFO` env shared with an external session | `config.fifo` + the 7c no-reader recipe | ✅ |
+
+End state: a fresh user adds the lazy spec, sets `holdir` only if their HOL
+is not discoverable, and everything works --- no dotfiles, no exported
+environment variables, nothing copied by hand.
+
+-   [x] **7a --- auto-bootstrap Vimhol into spawned REPLs.** Right after
+    `\x` spawns the terminal job, feed the pty (each line a complete
+    statement --- this cannot go through `send()`: the pipe it enables is
+    not up yet):
+
+        val _ = case #lookupStruct PolyML.globalNameSpace "Vimhol" of
+                  NONE => use "<holdir>/tools/editor-modes/vim/vimhol.sml"
+                | SOME _ => ();
+        val _ = print "holnvim: vimhol ready\n";
+
+    wrapped in quietdec toggles to keep the banner clean. No timing games
+    needed: hol evaluates stdin only after `check-intconfig.sml` has run
+    any `~/.hol-config.sml` / `$HOL_CONFIG`, so the guard always observes
+    whether the user's own config loaded Vimhol and no-ops instead of
+    attaching a second tail to the pipe (guard validated against
+    Trindemossen 2 with and without a config). The sentinel print is the
+    deterministic ready signal for users and the e2e boot wait.
+    Config: `vimhol = true` (default) `| false | "/path/to/vimhol.sml"`;
+    discovery is `<holdir()>/tools/editor-modes/vim/vimhol.sml` (plus the
+    pre-rename `tools/vim/` for older installs). The generated vimhol.sml
+    is location-independent for us: its baked-in fifo path is only the
+    `$VIMHOL_FIFO`-unset fallback, and `repl.open` always exports a
+    per-session `VIMHOL_FIFO`. If the file cannot be found, warn once and
+    continue --- the session still works, with multi-line sends and `\c`
+    degrading to the raw pty exactly as they do today without the dotfile.
+-   [x] **7b --- single `holdir()` resolver.** Order: `config.holdir` →
+    derived from the resolved hol binary (`.../bin/hol`, resolved through
+    `$PATH` and symlinks, two dirs up, accepted when a `tools/` sibling
+    confirms a HOL tree --- covers lastmaker and `hol_cmd` too) → `$HOLDIR`
+    demoted to last-resort fallback. `holdeptool()` and `fifo.path()`'s
+    default now route through it (7a discovery will too). One
+    `holdir = "..."` line in the lazy spec (or nothing at all when hol is
+    discoverable) configures everything; the README setup section no longer
+    asks for environment variables.
+-   [x] **7c --- external-session recipe.** The fifo transport targets a
+    HOL the plugin did not spawn, so it cannot bootstrap it --- instead the
+    failure is actionable: the "no fifo reader" warning names the resolved
+    fifo path and the exact paste-able recipe (`repl.external_recipe()`:
+    `VIMHOL_FIFO='<path>' hol` plus the guarded `use` line, or a
+    placeholder when vimhol.sml is unresolvable), and creates the fifo if
+    absent (vimhol creates it too; both sides tolerate it existing --- a
+    non-fifo in the way is named instead). Recipe validated verbatim: an
+    external piped hol given exactly those two lines attaches, and a
+    session-less Neovim's multi-line send evaluates in it. (Gotcha for
+    humans watching such a session: a PIPED hol keeps vimhol's
+    `print_depth 0`, so value echoes are invisible --- interactive/pty
+    sessions print normally.)
+-   [x] **7d --- prove it in tests** (landed with 7a). The e2e tier used to
+    be green only because the development machine's `~/.hol-config.sml`
+    loads vimhol --- exactly the dependence Phase 7 abolishes. The e2e REPL
+    now boots with `HOL_NOCONFIG=1` and waits on the `holnvim: vimhol
+    ready` sentinel (replacing the "Use-ing configuration" needle), so
+    every pipe-routed multi-line send, `\c` interrupt, and `\l` in the
+    suite runs on the plugin's own bootstrap with zero dotfiles. The
+    guard's other branch --- a config that pre-loads Vimhol: bootstrap
+    no-ops, the sentinel still prints, and a pipe-routed probe evaluates
+    exactly once --- is verified by a standalone smoke script; folding that
+    into the suite costs a second hol boot, deferred to Phase 6 polish
+    alongside `:checkhealth holnvim` naming the exact missing `setup()`
+    option whenever a discovery step fails.
+
+Phase 7 complete ✅
 
 ## Keep in view (not primary)
 

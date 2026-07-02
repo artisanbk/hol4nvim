@@ -15,7 +15,9 @@ M.config = {
 	split = "vertical",
 	start_insert = false, -- enter vim insert mode after opening
 	transport = "auto", -- "auto" | "terminal" | "fifo": how send() delivers
-	fifo = nil, -- explicit fifo path; else $VIMHOL_FIFO, else $HOLDIR default
+	fifo = nil, -- explicit fifo path; else $VIMHOL_FIFO, else the holdir default
+	holdir = nil, -- HOL root; else derived from the hol binary, else $HOLDIR
+	vimhol = true, -- auto-load vimhol.sml into spawned REPLs; false | "/path"
 	abbreviations = false, -- ASCII->unicode insert abbreviations (holabs)
 }
 
@@ -74,6 +76,154 @@ M.which_hol = function()
 end
 
 --[[
+  Resolve the HOL installation root (Phase 7b). Priority:
+    1. config.holdir (explicit)
+    2. derived from the hol binary actually being run -- which_hol()
+       resolved through $PATH and symlinks; <root>/bin/hol implies <root>,
+       accepted when it looks like a HOL tree (has tools/)
+    3. $HOLDIR (last resort, e.g. layouts where hol is not under a bin/)
+  holdeptool (\l), the default global fifo path, and vimhol.sml discovery
+  (7a) all route through this, so one `holdir` option -- or nothing at all,
+  when hol itself is discoverable -- configures everything.
+--]]
+M.holdir = function()
+	if M.config.holdir and M.config.holdir ~= "" then
+		return M.config.holdir
+	end
+
+	local hol = M.which_hol()
+	if hol ~= "" then
+		local abs = vim.fn.exepath(hol)
+		if abs ~= "" then
+			abs = vim.uv.fs_realpath(abs) or abs
+			local bindir = vim.fn.fnamemodify(abs, ":h")
+			if vim.fn.fnamemodify(bindir, ":t") == "bin" then
+				local root = vim.fn.fnamemodify(bindir, ":h")
+				if vim.fn.isdirectory(root .. "/tools") == 1 then
+					return root
+				end
+			end
+		end
+	end
+
+	local env = vim.env.HOLDIR
+	if env and env ~= "" then
+		return env
+	end
+
+	return nil
+end
+
+--[[
+  Locate vimhol.sml for the auto-bootstrap (Phase 7a). config.vimhol:
+    true (default) -- discover under holdir()
+    "/path"        -- explicit file
+    false          -- bootstrap disabled
+  Returns nil when disabled or not found.
+--]]
+M.vimhol_sml = function()
+	local cfg = M.config.vimhol
+	if cfg == false then
+		return nil
+	end
+	if type(cfg) == "string" and cfg ~= "" then
+		return cfg
+	end
+	local holdir = M.holdir()
+	if holdir then
+		for _, rel in ipairs({
+			"/tools/editor-modes/vim/vimhol.sml",
+			"/tools/vim/vimhol.sml", -- layout before the editor-modes rename
+		}) do
+			if vim.fn.filereadable(holdir .. rel) == 1 then
+				return holdir .. rel
+			end
+		end
+	end
+	return nil
+end
+
+--[[
+  One SML statement that loads vimhol.sml unless the session already has it
+  (a ~/.hol-config.sml may have `use`d it first): #lookupStruct sees whether
+  the top-level Vimhol structure is bound. Shared by the 7a bootstrap and
+  the 7c external-session recipe.
+--]]
+local function guarded_use(path)
+	local sml = path:gsub("\\", "\\\\"):gsub('"', '\\"')
+	return 'val _ = (case #lookupStruct PolyML.globalNameSpace "Vimhol" of'
+		.. ' NONE => use "'
+		.. sml
+		.. '" | SOME _ => ());'
+end
+
+--[[
+  Auto-bootstrap Vimhol into a freshly spawned REPL (Phase 7a), replacing
+  upstream's hand-edited ~/.hol-config.sml. Without Vimhol tailing the
+  session's pipe, multi-line sends and \c silently degrade to the raw pty.
+
+  Fed straight into the pty, NOT through send(): the pipe this enables is
+  not up yet. No timing games either -- hol evaluates stdin only after
+  check-intconfig.sml has run any ~/.hol-config.sml / $HOL_CONFIG, so the
+  lookupStruct guard reliably sees whether the user's own config already
+  loaded Vimhol and no-ops instead of attaching a second tail to the pipe.
+  Each line is one complete statement, so a failing `use` cannot swallow
+  the rest: quietdec is always toggled back and the sentinel always
+  prints. The sentinel is built with `^` so the echoed input line cannot
+  match a "holnvim: vimhol ready" search -- only the print output does.
+--]]
+local function bootstrap_vimhol(job)
+	local path = M.vimhol_sml()
+	if not path then
+		if M.config.vimhol ~= false then
+			vim.notify(
+				"holnvim: vimhol.sml not found -- multi-line sends and the"
+					.. " interrupt keymap degrade to the raw pty. Set"
+					.. " config.holdir or config.vimhol"
+					.. " (config.vimhol = false silences this).",
+				vim.log.levels.WARN
+			)
+		end
+		return
+	end
+	vim.fn.chansend(job, table.concat({
+		"val _ = HOL_Interactive.toggle_quietdec();",
+		guarded_use(path),
+		"val _ = HOL_Interactive.toggle_quietdec();",
+		'val _ = print ("holnvim: vimhol" ^ " ready\\n");',
+		"",
+	}, "\n"))
+end
+
+--[[
+  Paste-able recipe for attaching an EXTERNAL HOL session to the fifo
+  (Phase 7c). The plugin cannot bootstrap a REPL it did not spawn, so the
+  "no fifo reader" warning hands the user the exact commands instead --
+  and creates the fifo, so the pasted hol finds a working pipe.
+--]]
+M.external_recipe = function()
+	local fifo = require("holnvim.fifo")
+	local path = fifo.path()
+	if not path then
+		return "no fifo path resolves -- set config.fifo or config.holdir"
+	end
+	if not fifo.ensure(path) then
+		return path .. " exists but is not a fifo -- remove it or point config.fifo elsewhere"
+	end
+	local paste
+	local vimhol = M.vimhol_sml()
+	if vimhol then
+		paste = guarded_use(vimhol)
+	else
+		paste = 'use "<HOLDIR>/tools/editor-modes/vim/vimhol.sml";'
+	end
+	return "in a terminal:  VIMHOL_FIFO='"
+		.. path
+		.. "' hol\npaste into it:  "
+		.. paste
+end
+
+--[[
   For removing session(s) from stack and clean up the fifo.
   This is used by `on_exit` so a REPL that dies or
   is closed from its own shell doesn't leave a stale
@@ -101,7 +251,7 @@ M.open = function()
 	local cmd = M.which_hol()
 	if cmd == "" or vim.fn.executable(cmd) ~= 1 then
 		vim.notify("hol_nvim: hol command not found (" .. cmd .. ").\
-      Set $HOLDIR or config.hol_cmd", vim.log.levels.ERROR)
+      Set config.hol_cmd or config.holdir", vim.log.levels.ERROR)
 		return
 	end
 
@@ -116,7 +266,7 @@ M.open = function()
     Create per session fifo; This will be used by `he` and `hs` commands;
   --]]
 	local pipe = vim.fn.tempname()
-	vim.system({ "mkfifo", pipe }):wait()
+	require("holnvim.fifo").ensure(pipe)
 
 	--[[
     Make window and empty buffer;
@@ -158,6 +308,8 @@ M.open = function()
   --]]
 	local buf = vim.api.nvim_get_current_buf()
 	table.insert(M.sessions, { buf = buf, job = job, pipe = pipe })
+
+	bootstrap_vimhol(job)
 
 	--[[
     Assign unique, informative buffer name: "hol (<bufnr>): <FooScript>".
@@ -273,8 +425,9 @@ M.send = function(text)
 			fifo.send(text)
 		else
 			vim.notify(
-				"holnvim: no in-vim REPL and no fifo reader\
-        (start one with the open keymap, or launch a Vimhol HOL session)",
+				"holnvim: no in-vim REPL and no fifo reader.\n"
+					.. M.external_recipe()
+					.. "\n(or start an in-vim REPL with the open keymap)",
 				vim.log.levels.WARN
 			)
 		end
@@ -426,17 +579,21 @@ M.send_pattern_line, M.send_pattern_visual = senders(transform.pattern)
   available in the session -- after which `open`s and goals on them work.
 --]]
 
--- Resolve holdeptool.exe: next to the chosen hol, else under $HOLDIR/bin.
+-- Resolve holdeptool.exe: next to the chosen hol, else under holdir()/bin
+-- (the next-to-hol branch keeps odd layouts working without any config).
 local function holdeptool()
 	local hol = M.which_hol()
 	if hol ~= "" then
-		local tool = vim.fn.fnamemodify(hol, ":h") .. "/holdeptool.exe"
-		if vim.fn.executable(tool) == 1 then
-			return tool
+		local abs = vim.fn.exepath(hol)
+		if abs ~= "" then
+			local tool = vim.fn.fnamemodify(abs, ":h") .. "/holdeptool.exe"
+			if vim.fn.executable(tool) == 1 then
+				return tool
+			end
 		end
 	end
-	local holdir = vim.env.HOLDIR
-	if holdir and holdir ~= "" then
+	local holdir = M.holdir()
+	if holdir then
 		local tool = holdir .. "/bin/holdeptool.exe"
 		if vim.fn.executable(tool) == 1 then
 			return tool
@@ -454,7 +611,7 @@ local function send_load(text)
 	local tool = holdeptool()
 	if tool == "" then
 		vim.notify(
-			"holnvim: holdeptool.exe not found (set $HOLDIR)",
+			"holnvim: holdeptool.exe not found (set config.holdir)",
 			vim.log.levels.ERROR
 		)
 		return

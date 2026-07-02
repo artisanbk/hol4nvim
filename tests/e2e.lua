@@ -24,6 +24,12 @@ if repl.which_hol() == "" then
 	t.fatal("hol not found: e2e needs HOL4 (set $HOLDIR). Run `make test-unit` for the HOL-free tier.")
 end
 
+-- Boot hol with NO user config (check-intconfig.sml honours HOL_NOCONFIG):
+-- everything Vimhol-dependent below (pipe-routed multi-line sends, \c) then
+-- proves the plugin's own 7a bootstrap, not a ~/.hol-config.sml on the
+-- development machine.
+vim.env.HOL_NOCONFIG = "1"
+
 repl.open()
 local session = repl.current()
 if not session then
@@ -76,10 +82,12 @@ local function goto_line(pat)
 	end
 end
 
--- hol takes a while to boot; wait until the hol-config (which starts
--- Vimhol's fifo tail) is loaded, then give the tail a moment to attach --
--- otherwise the first multi-line send falls back to the echoed pty path
-wait_for("REPL ready", "Use-ing configuration", 90000)
+-- hol takes a while to boot; wait for the bootstrap sentinel, printed only
+-- after the guarded `use vimhol.sml` completed (the echoed input line cannot
+-- match: the sentinel source is split with ^). Then give Vimhol's fifo tail
+-- a moment to attach -- otherwise the first multi-line send falls back to
+-- the echoed pty path.
+wait_for("REPL ready (vimhol bootstrapped)", "holnvim: vimhol ready", 90000)
 vim.wait(2000)
 
 -- \l : load deps from the open line; full HOLLoad shape also executes the
