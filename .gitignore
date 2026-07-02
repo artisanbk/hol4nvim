@@ -6,3 +6,6 @@ examples/.HOLMK/
 examples/*.uo
 examples/*.ui
 examples/.hol/
+
+.claude/*
+CLAUDE.md
