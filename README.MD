@@ -14,7 +14,8 @@ See [ROADMAP.md](ROADMAP.md) for parity status with the upstream vim config.
   config = function()
     require("hol4nvim").setup({
       -- defaults shown; all optional
-      hol_cmd = nil,          -- explicit hol binary; else .HOLMK/lastmaker,
+      hol_cmd = nil,          -- explicit hol binary (a directory works too:
+                              -- bin/ or the HOL root); else .HOLMK/lastmaker,
                               -- then $HOLDIR/bin/hol, then hol on $PATH
       holdir = nil,           -- HOL installation root; else derived from the
                               -- hol binary being run, else $HOLDIR. Used for
@@ -34,6 +35,9 @@ See [ROADMAP.md](ROADMAP.md) for parity status with the upstream vim config.
   end,
 }
 ```
+
+Path options (`hol_cmd`, `holdir`, `fifo`, a string `vimhol`) may use `~`;
+it is expanded by `setup()`.
 
 ### Filetype detection
 

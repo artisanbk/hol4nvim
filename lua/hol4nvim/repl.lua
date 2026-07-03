@@ -52,7 +52,16 @@ end
 M.which_hol = function()
 	if M.config.hol_cmd and M.config.hol_cmd ~= "" then
 		-- not nil (overwritten in init config) and not empty
-		return M.config.hol_cmd
+		local cmd = M.config.hol_cmd
+		if vim.fn.isdirectory(cmd) == 1 then
+			-- tolerate a directory (the bin/ dir, or the HOL root itself)
+			for _, suffix in ipairs({ "/hol", "/bin/hol" }) do
+				if vim.fn.executable(cmd .. suffix) == 1 then
+					return cmd .. suffix
+				end
+			end
+		end
+		return cmd
 	end
 
 	local lm = lastmaker_hol()

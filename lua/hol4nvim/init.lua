@@ -43,6 +43,14 @@ end
 --]]
 M.setup = function(opts)
 	opts = opts or {}
+	-- Specs routinely say "~/..." -- but jobstart/filereadable/writefile take
+	-- `~` literally, so expand path-like options once here. `vimhol` is only
+	-- path-like in its explicit-path form (true/false pass through).
+	for _, key in ipairs({ "hol_cmd", "holdir", "fifo", "vimhol" }) do
+		if type(opts[key]) == "string" and opts[key] ~= "" then
+			opts[key] = vim.fs.normalize(opts[key])
+		end
+	end
 	repl.config = vim.tbl_deep_extend("force", repl.config, opts)
 	create_commands()
 end

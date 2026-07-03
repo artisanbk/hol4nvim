@@ -494,6 +494,46 @@ vim.env.VIMHOL_FIFO, vim.env.HOLDIR = save_fifo_env, save_holdir
 repl.config.hol_cmd, repl.config.holdir = save_hol_cmd, save_cfg_holdir
 repl.config.vimhol = save_cfg_vimhol
 
+-- setup() expands "~" in path-like options (a spec written on another
+-- machine says hol_cmd = "~/HOL/bin/hol"; jobstart takes ~ literally)
+do
+	local save = vim.deepcopy(repl.config)
+	require("hol4nvim").setup({
+		hol_cmd = "~/HOL/bin/hol",
+		holdir = "~/HOL/",
+		fifo = "~/HOL/tools/editor-modes/vim/fifo",
+		vimhol = true,
+	})
+	local home = vim.uv.os_homedir()
+	t.check("setup expands ~ in hol_cmd", repl.config.hol_cmd == home .. "/HOL/bin/hol")
+	t.check(
+		"setup expands ~ and trims trailing / in holdir",
+		repl.config.holdir == home .. "/HOL"
+	)
+	t.check(
+		"setup expands ~ in fifo",
+		repl.config.fifo == home .. "/HOL/tools/editor-modes/vim/fifo"
+	)
+	t.check("setup leaves boolean vimhol alone", repl.config.vimhol == true)
+	repl.config = save
+end
+
+-- which_hol tolerates hol_cmd naming a directory (bin/ or the HOL root)
+do
+	local save = repl.config.hol_cmd
+	repl.config.hol_cmd = fake_root .. "/bin"
+	t.check(
+		"which_hol resolves hol inside a bin/ directory hol_cmd",
+		repl.which_hol() == fake_root .. "/bin/hol"
+	)
+	repl.config.hol_cmd = fake_root
+	t.check(
+		"which_hol resolves bin/hol inside a HOL-root hol_cmd",
+		repl.which_hol() == fake_root .. "/bin/hol"
+	)
+	repl.config.hol_cmd = save
+end
+
 -- ftplugin: buffer-local keymaps appear on a hol4script buffer, under
 -- whatever <localleader> init.lua sets (do not assume backslash)
 vim.cmd("enew")

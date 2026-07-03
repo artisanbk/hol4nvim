@@ -354,6 +354,15 @@ environment variables, nothing copied by hand.
     alongside `:checkhealth hol4nvim` naming the exact missing `setup()`
     option whenever a discovery step fails.
 
+-   [x] **7e --- forgiving path options.** A spec written from memory says
+    `hol_cmd = "~/HOL/bin/"`: `setup()` expands `~` in the path-like
+    options (`hol_cmd`, `holdir`, `fifo`, string `vimhol`) since
+    jobstart/filereadable take it literally, and `which_hol()` accepts a
+    directory (the `bin/` or the HOL root) by finding `hol`/`bin/hol`
+    inside it. A fresh `lazy.nvim` install straight from GitHub with
+    exactly such a spec was verified headless end-to-end (isolated XDG
+    dirs: clone, no load at startup, detection + attach on `*Script.sml`).
+
 Phase 7 complete ✅
 
 ## Keep in view (not primary)
