@@ -1,12 +1,13 @@
 --[[
-  Demo / test entry point for developing holnvim.
+  Demo / test entry point for developing hol4nvim.
 
   Run it isolated, without touching your real config:
       nvim -u init.lua path/to/FooScript.sml
 
   It bootstraps lazy.nvim and loads THIS repository as a local plugin (dir=).
-  For real use you would instead add the holnvim spec to your own config and
-  point it at the published repo ("user/holnvim") rather than a local dir.
+  For real use you would instead add the hol4nvim spec to your own config and
+  point it at the published repo ("artisanbk/hol4nvim") rather than a local
+  dir, with `ft = "hol4script"` to lazy-load (see README).
 --]]
 
 -- Leaders must be set before any plugin/keymap loads. <localleader> drives the
@@ -34,12 +35,12 @@ local root = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h")
 require("lazy").setup({
 	{
 		dir = root,
-		name = "holnvim",
+		name = "hol4nvim",
 		-- Loaded eagerly (no ft/cmd/keys), so the plugin is on the runtimepath
 		-- at startup: its ftdetect/ runs, and setup() registers the commands,
 		-- before the *Script.sml argument is opened.
 		config = function()
-			require("holnvim").setup({
+			require("hol4nvim").setup({
 				abbreviations = true, -- holabs ASCII->unicode (off by default)
 				-- transport = "auto",   -- "terminal" | "fifo"
 				-- hol_cmd = "/path/to/bin/hol",

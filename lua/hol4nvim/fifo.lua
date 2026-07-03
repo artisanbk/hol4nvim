@@ -1,5 +1,5 @@
 --[[
-  holnvim.fifo -- fifo transport for send().
+  hol4nvim.fifo -- fifo transport for send().
 
   The classic Vimhol delivery path: write the code to a temp *Script.sml file,
   then append "ReadFile <file>" to a named pipe. A HOL session running Vimhol
@@ -7,7 +7,7 @@
   HOL process started anywhere (e.g. your own terminal/tmux), not just an
   in-vim :terminal. Mirrors HOLCEnd / HOLCRestore (hol.vim:45-57).
 
-  This module never requires holnvim.repl at load time -- only lazily inside
+  This module never requires hol4nvim.repl at load time -- only lazily inside
   functions -- so repl <-> fifo stays free of a load-time cycle.
 --]]
 
@@ -33,7 +33,7 @@ end
   Returns nil if none is determinable.
 --]]
 M.path = function()
-	local repl = require("holnvim.repl")
+	local repl = require("hol4nvim.repl")
 	if repl.config.fifo and repl.config.fifo ~= "" then
 		return repl.config.fifo
 	end
@@ -105,7 +105,7 @@ M.send = function(text, path)
 	path = path or M.path()
 	if not path then
 		vim.notify(
-			"holnvim: no fifo path (set config.fifo or config.holdir)",
+			"hol4nvim: no fifo path (set config.fifo or config.holdir)",
 			vim.log.levels.ERROR
 		)
 		return

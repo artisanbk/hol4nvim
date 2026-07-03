@@ -23,7 +23,7 @@ t.check("command :HolSendDocument", vim.fn.exists(":HolSendDocument") == 2)
 t.check("command :HolUnabbrev", vim.fn.exists(":HolUnabbrev") == 2)
 
 -- transform: pure string -> string layer
-local transform = require("holnvim.transform")
+local transform = require("hol4nvim.transform")
 local function expand_wraps(inner)
 	return "proofManagerLib.expand(fn HOLgoal => (" .. inner .. ") HOLgoal)"
 end
@@ -206,7 +206,7 @@ t.check("unclosed line is the outermost open, not the first ever", reopened == 4
 
 -- send() guard: incomplete script-file blocks are refused with a warning
 -- instead of wedging the REPL's filter at its '#' prompt
-local repl_for_guard = require("holnvim.repl")
+local repl_for_guard = require("hol4nvim.repl")
 local saved_transport = repl_for_guard.config.transport
 repl_for_guard.config.transport = "terminal" -- no session: nothing really sent
 local notes = {}
@@ -318,8 +318,8 @@ repl_for_guard.config.transport = saved_transport
 -- holdir() resolution priority: config.holdir > derived from the hol
 -- binary (through $PATH and symlinks, requiring bin/ + a tools/ sibling)
 -- > $HOLDIR. Uses a fake HOL tree so the tier stays HOL-free.
-local repl = require("holnvim.repl")
-local fifo = require("holnvim.fifo")
+local repl = require("hol4nvim.repl")
+local fifo = require("hol4nvim.fifo")
 local save_fifo_env, save_holdir = vim.env.VIMHOL_FIFO, vim.env.HOLDIR
 local save_hol_cmd, save_cfg_holdir = repl.config.hol_cmd, repl.config.holdir
 local save_cfg_vimhol = repl.config.vimhol
@@ -630,7 +630,7 @@ vim.api.nvim_buf_set_lines(0, 0, -1, false, {
 	"  rw[]",
 	"QED",
 })
-local select = require("holnvim.select")
+local select = require("hol4nvim.select")
 
 vim.api.nvim_win_set_cursor(0, { 1, 10 }) -- on the + inside `x + y`
 select.term()
@@ -681,7 +681,7 @@ t.check(
 	vim.api.nvim_get_current_line() == "p ∧ q "
 )
 vim.api.nvim_buf_set_lines(0, 0, -1, false, { "∀x. x ∈ s ⇒ x ≤ y ∧ T" })
-require("holnvim.abbrev").unabbrev(1, 1)
+require("hol4nvim.abbrev").unabbrev(1, 1)
 t.check(
 	"unabbrev restores ASCII",
 	vim.api.nvim_get_current_line() == "!x. x IN s ==> x <= y /\\ T"

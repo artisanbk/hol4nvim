@@ -1,5 +1,5 @@
 --[[
-  holnvim.keymaps -- the single registry of buffer-local HOL keymaps.
+  hol4nvim.keymaps -- the single registry of buffer-local HOL keymaps.
 
   ftplugin/hol4script.lua calls attach() for each hol4script buffer. One spec
   entry per map keeps the table aligned with upstream hol.vim's letters (see
@@ -14,8 +14,8 @@
 local M = {}
 
 local function specs()
-	local repl = require("holnvim.repl")
-	local select = require("holnvim.select")
+	local repl = require("hol4nvim.repl")
+	local select = require("hol4nvim.select")
 	return {
 		-- session
 		{ "n", "x", repl.open, "Start REPL" },
@@ -71,7 +71,7 @@ end
 
 --- Install the buffer-local keymaps for the current buffer.
 M.attach = function()
-	local config = require("holnvim.repl").config
+	local config = require("hol4nvim.repl").config
 	if config.keymaps == false then
 		return
 	end

@@ -1,5 +1,5 @@
 --[[
-  holnvim.abbrev -- ASCII -> Unicode insert-mode abbreviations for HOL
+  hol4nvim.abbrev -- ASCII -> Unicode insert-mode abbreviations for HOL
   terms, a port of upstream holabs.vim. Opt-in like upstream (there you
   source holabs.vim yourself): enable with `abbreviations = true` in
   setup(). unabbrev() is the reverse (port of HOLUnab), exposed as
@@ -35,7 +35,7 @@ M.pairs = {
 --- Install the buffer-local abbreviations (called from the ftplugin; no-op
 --- unless config.abbreviations is set).
 M.attach = function()
-	if not require("holnvim.repl").config.abbreviations then
+	if not require("hol4nvim.repl").config.abbreviations then
 		return
 	end
 	-- upstream: iskeyword+=>,/,\ so /\ ==> <= etc. abbreviate as whole words

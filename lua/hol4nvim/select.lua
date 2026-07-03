@@ -1,5 +1,5 @@
 --[[
-  holnvim.select -- selection-movement helpers, a port of HOLSelect and its
+  hol4nvim.select -- selection-movement helpers, a port of HOLSelect and its
   mappings (hol.vim:213-271). No REPL involved: these just make the visual
   selection that the send maps then consume.
 --]]

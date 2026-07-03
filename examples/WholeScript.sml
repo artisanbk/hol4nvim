@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* holnvim h! (send whole document) demo -- a LINEAR script file.            *)
+(* hol4nvim h! (send whole document) demo -- a LINEAR script file.            *)
 (*                                                                           *)
 (* Unlike TestScript.sml (a keymap demo made of bare fragments), every       *)
 (* statement here is complete, so the whole file batch-evaluates. Workflow:  *)
@@ -21,7 +21,7 @@ open HolKernel boolLib bossLib arithmeticTheory;
 val _ = new_theory "Whole";
 
 (* Comments are fine anywhere, (* even nested *), and a comment mentioning   *)
-(* Theorem foo: with no QED must confuse neither hol nor holnvim's guard.    *)
+(* Theorem foo: with no QED must confuse neither hol nor hol4nvim's guard.    *)
 
 fun double x = x + x;
 

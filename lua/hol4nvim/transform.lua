@@ -1,5 +1,5 @@
 --[[
-  holnvim.transform -- reshape a selection into a proof-manager call.
+  hol4nvim.transform -- reshape a selection into a proof-manager call.
 
   This is the "what to send" layer, orthogonal to repl's "how to send"
   (terminal vs fifo). Each function takes the raw selected text and returns the

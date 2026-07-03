@@ -7,7 +7,7 @@
 local M = {}
 
 -- Reshape selections into proof-manager calls (the "what to send" layer).
-local transform = require("holnvim.transform")
+local transform = require("hol4nvim.transform")
 
 -- Config which can be overwritten at `init.lua` setup()
 M.config = {
@@ -170,14 +170,14 @@ end
   Each line is one complete statement, so a failing `use` cannot swallow
   the rest: quietdec is always toggled back and the sentinel always
   prints. The sentinel is built with `^` so the echoed input line cannot
-  match a "holnvim: vimhol ready" search -- only the print output does.
+  match a "hol4nvim: vimhol ready" search -- only the print output does.
 --]]
 local function bootstrap_vimhol(job)
 	local path = M.vimhol_sml()
 	if not path then
 		if M.config.vimhol ~= false then
 			vim.notify(
-				"holnvim: vimhol.sml not found -- multi-line sends and the"
+				"hol4nvim: vimhol.sml not found -- multi-line sends and the"
 					.. " interrupt keymap degrade to the raw pty. Set"
 					.. " config.holdir or config.vimhol"
 					.. " (config.vimhol = false silences this).",
@@ -190,7 +190,7 @@ local function bootstrap_vimhol(job)
 		"val _ = HOL_Interactive.toggle_quietdec();",
 		guarded_use(path),
 		"val _ = HOL_Interactive.toggle_quietdec();",
-		'val _ = print ("holnvim: vimhol" ^ " ready\\n");',
+		'val _ = print ("hol4nvim: vimhol" ^ " ready\\n");',
 		"",
 	}, "\n"))
 end
@@ -202,7 +202,7 @@ end
   and creates the fifo, so the pasted hol finds a working pipe.
 --]]
 M.external_recipe = function()
-	local fifo = require("holnvim.fifo")
+	local fifo = require("hol4nvim.fifo")
 	local path = fifo.path()
 	if not path then
 		return "no fifo path resolves -- set config.fifo or config.holdir"
@@ -266,7 +266,7 @@ M.open = function()
     Create per session fifo; This will be used by `he` and `hs` commands;
   --]]
 	local pipe = vim.fn.tempname()
-	require("holnvim.fifo").ensure(pipe)
+	require("hol4nvim.fifo").ensure(pipe)
 
 	--[[
     Make window and empty buffer;
@@ -295,7 +295,7 @@ M.open = function()
   --]]
 	if job <= 0 then
 		vim.notify(
-			"holnvim: failed to start hol (" .. cmd .. ")",
+			"hol4nvim: failed to start hol (" .. cmd .. ")",
 			vim.log.levels.ERROR
 		)
 		pcall(vim.uv.fs_unlink, pipe)
@@ -341,7 +341,7 @@ end
 --]]
 local function terminal_send(session, text)
 	if text:find("\n") and session.pipe then
-		local fifo = require("holnvim.fifo")
+		local fifo = require("hol4nvim.fifo")
 		if fifo.ready(session.pipe) then
 			fifo.send(text, session.pipe)
 			return
@@ -401,7 +401,7 @@ M.send = function(text)
 				.. "'."
 		end
 		vim.notify(
-			"holnvim: not sent -- incomplete block, no closing '"
+			"hol4nvim: not sent -- incomplete block, no closing '"
 				.. missing
 				.. "' in the selection."
 				.. hint
@@ -420,12 +420,12 @@ M.send = function(text)
 	elseif mode ~= "terminal" then
 		-- fifo transport (external HOL tailing the pipe). Lazy-require breaks
 		-- the load-time cycle between repl and fifo.
-		local fifo = require("holnvim.fifo")
+		local fifo = require("hol4nvim.fifo")
 		if fifo.ready() then
 			fifo.send(text)
 		else
 			vim.notify(
-				"holnvim: no in-vim REPL and no fifo reader.\n"
+				"hol4nvim: no in-vim REPL and no fifo reader.\n"
 					.. M.external_recipe()
 					.. "\n(or start an in-vim REPL with the open keymap)",
 				vim.log.levels.WARN
@@ -433,7 +433,7 @@ M.send = function(text)
 		end
 	else
 		vim.notify(
-			"holnvim: transport=terminal but no in-VIM REPL",
+			"hol4nvim: transport=terminal but no in-VIM REPL",
 			vim.log.levels.WARN
 		)
 	end
@@ -488,7 +488,7 @@ local function stripped_or_warn(raw)
 	local text, unclosed = transform.strip_comments(raw)
 	if unclosed then
 		vim.notify(
-			"holnvim: not sent -- unclosed comment: a '(*' on line "
+			"hol4nvim: not sent -- unclosed comment: a '(*' on line "
 				.. unclosed
 				.. " of the selection has no matching '*)'. SML comments"
 				.. " nest, so every '(*' inside a comment needs its own '*)'.",
@@ -498,7 +498,7 @@ local function stripped_or_warn(raw)
 	end
 	if not text:find("%S") then
 		vim.notify(
-			"holnvim: nothing to send (only comments/whitespace)",
+			"hol4nvim: nothing to send (only comments/whitespace)",
 			vim.log.levels.INFO
 		)
 		return nil
@@ -611,7 +611,7 @@ local function send_load(text)
 	local tool = holdeptool()
 	if tool == "" then
 		vim.notify(
-			"holnvim: holdeptool.exe not found (set config.holdir)",
+			"hol4nvim: holdeptool.exe not found (set config.holdir)",
 			vim.log.levels.ERROR
 		)
 		return
@@ -625,7 +625,7 @@ local function send_load(text)
 	local deps = vim.fn.systemlist({ tool, tmp })
 	if vim.v.shell_error ~= 0 then
 		vim.notify(
-			"holnvim: holdeptool failed:\n" .. table.concat(deps, "\n"),
+			"hol4nvim: holdeptool failed:\n" .. table.concat(deps, "\n"),
 			vim.log.levels.ERROR
 		)
 		return
@@ -639,7 +639,7 @@ local function send_load(text)
 		end
 	end
 	if #loads == 0 then
-		vim.notify("holnvim: no dependencies to load", vim.log.levels.INFO)
+		vim.notify("hol4nvim: no dependencies to load", vim.log.levels.INFO)
 		return
 	end
 
@@ -725,7 +725,7 @@ end
   line discipline turns it into SIGINT, which PolyML takes as Interrupt).
 --]]
 M.interrupt = function()
-	local fifo = require("holnvim.fifo")
+	local fifo = require("hol4nvim.fifo")
 	local session = M.current()
 	if session and session.pipe and fifo.ready(session.pipe) then
 		vim.fn.writefile({ "Interrupt" }, session.pipe, "a")
@@ -739,7 +739,7 @@ M.interrupt = function()
 		vim.fn.chansend(session.job, "\3") -- CTRL-C
 		return
 	end
-	vim.notify("holnvim: no HOL session to interrupt", vim.log.levels.WARN)
+	vim.notify("hol4nvim: no HOL session to interrupt", vim.log.levels.WARN)
 end
 
 --[[

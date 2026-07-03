@@ -6,7 +6,7 @@
   (Filetype detection lives in ftdetect/hol4script.lua.)
 --]]
 
-local repl = require("holnvim.repl")
+local repl = require("hol4nvim.repl")
 local M = {}
 
 local function create_commands()
@@ -31,7 +31,7 @@ local function create_commands()
 	end, { desc = "Send whole buffer to HOL4 REPL (open lines dropped)" })
 
 	vim.api.nvim_create_user_command("HolUnabbrev", function(cmd)
-		require("holnvim.abbrev").unabbrev(cmd.line1, cmd.line2)
+		require("hol4nvim.abbrev").unabbrev(cmd.line1, cmd.line2)
 	end, {
 		range = "%",
 		desc = "Replace HOL unicode with ASCII (whole buffer, or a range)",
@@ -39,7 +39,7 @@ local function create_commands()
 end
 
 --[[
-  Entry points; Call once from config via `require("holnvim").setup({...})`
+  Entry points; Call once from config via `require("hol4nvim").setup({...})`
 --]]
 M.setup = function(opts)
 	opts = opts or {}

@@ -4,20 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A port of the default Vim configuration shipped with [HOL4](https://hol-theorem-prover.org/) (the HOL4 interactive theorem prover) to Neovim, targeting users of [lazy.nvim](https://github.com/folke/lazy.nvim) for plugin management.
-
-The repository is in an early/stub stage: the files currently sketch the intended structure rather than provide a working configuration. Expect incomplete and placeholder code (e.g. unfinished statements, typos). When editing, treat the existing lines as intent to be completed, not as a working baseline to preserve.
+hol4nvim: a standalone lazy.nvim plugin porting the Vim configuration shipped with [HOL4](https://hol-theorem-prover.org/) (the HOL4 interactive theorem prover) to Neovim. The plugin is working; see ROADMAP.md for the authoritative parity status, architecture notes, and remaining phases.
 
 ## Structure
 
-- `init.lua` — Neovim entry point. Bootstraps lazy.nvim and declares the plugin spec via `require("lazy").setup({ ... })`.
-- `ftplugin/hol.lua` — Buffer-local setup that loads only for buffers with the `hol` filetype (Neovim runs `ftplugin/<filetype>.lua` automatically on `FileType`). HOL4-specific buffer options, keymaps, and commands belong here. Uses the standard `vim.b.did_ftplugin` reload guard.
+- `lua/hol4nvim/` — the plugin. Layering (keep it): `transform.lua` is pure string→string reshapers with no plugin dependencies; `repl.lua` owns transport/session state and `M.config`; `fifo.lua` is the fifo transport (never requires `repl` at load time); `init.lua` is `setup(opts)` + user commands; `keymaps.lua` is the single keymap registry.
+- `ftplugin/hol4script.lua`, `ftdetect/hol4script.lua`, `syntax/hol4script.vim` — buffer-local attach, `*Script.sml` detection, regex highlighting.
+- `init.lua` (repo root) — NOT the plugin: an isolated demo/dev entry point (`nvim -u init.lua examples/TestScript.sml`).
+- `tests/` — `make test` = `tests/unit.lua` (HOL-free) + `tests/e2e.lua` (drives a real hol REPL; slow). `make test-unit` for the fast tier. Extend both when adding features.
 
 ## Conventions
 
-- Configuration is Lua, using the `vim.*` Neovim API (e.g. `vim.b`, `vim.opt`, `vim.api`), not Vimscript.
-- Filetype-specific behavior goes in `ftplugin/`, not in `init.lua`. `init.lua` is for global setup and the plugin spec.
+- Lua with the `vim.*` API, not Vimscript (exception: `syntax/hol4script.vim`, a verbatim upstream port).
+- Filetype-specific behavior goes in `ftplugin/`; global setup in the module's `setup()`.
+- Deliberate divergences from upstream (guarded sends, comment stripping, unified transport, ...) are documented in ROADMAP.md — don't "fix" them back to upstream behavior.
 
 ## Reference
 
-The behavior being ported is HOL4's `tools/vim/` configuration in the HOL4 source tree. Consult it when deciding which mappings, commands, and options the Neovim port should reproduce.
+The behavior being ported is HOL4's `tools/editor-modes/vim/` configuration (`hol.vim`, `holabs.vim`, `hol4script.vim`, `filetype.vim`, `vimhol.sml`); a local checkout lives at `/home/lazarys/Gitscripts/HOL/tools/editor-modes/vim/`. Consult it when deciding what the port should reproduce.

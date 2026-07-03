@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* holnvim feature test script                                               *)
+(* hol4nvim feature test script                                               *)
 (*                                                                           *)
 (* Launch from the repo root:                                                *)
 (*     nvim -u init.lua examples/TestScript.sml                              *)

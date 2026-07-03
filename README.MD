@@ -1,4 +1,4 @@
-# holnvim
+# hol4nvim
 
 A port of the default vim configuration shipped with [HOL4](https://hol-theorem-prover.org/)
 (`tools/editor-modes/vim/`) to Neovim, for users of [lazy.nvim](https://github.com/folke/lazy.nvim).
@@ -9,9 +9,10 @@ See [ROADMAP.md](ROADMAP.md) for parity status with the upstream vim config.
 
 ```lua
 {
-  "user/holnvim", -- or dir = "/path/to/holnvim" for a local checkout
+  "artisanbk/hol4nvim",
+  ft = "hol4script", -- lazy-load on HOL4 script files; see "Filetype detection"
   config = function()
-    require("holnvim").setup({
+    require("hol4nvim").setup({
       -- defaults shown; all optional
       hol_cmd = nil,          -- explicit hol binary; else .HOLMK/lastmaker,
                               -- then $HOLDIR/bin/hol, then hol on $PATH
@@ -34,6 +35,22 @@ See [ROADMAP.md](ROADMAP.md) for parity status with the upstream vim config.
 }
 ```
 
+### Filetype detection
+
+The plugin ships its own detection (`ftdetect/hol4script.lua`): a
+`vim.filetype.add` pattern maps `*Script.sml` to the `hol4script` filetype.
+Pattern matches take precedence over extension matches, so HOL script files
+win over Neovim's built-in `*.sml` → `sml` detection while ordinary SML
+files are left alone.
+
+With `ft = "hol4script"` in the spec (recommended), lazy.nvim sources the
+plugin's `ftdetect/` files eagerly at startup but loads the plugin itself —
+`setup()`, keymaps, syntax — only when the first HOL4 script buffer opens.
+Opening `FooScript.sml` is what launches the plugin; other files never pay
+for it. Omitting `ft` simply loads everything at startup instead; detection
+behaves identically either way. Nothing needs to be configured for this —
+no autocmds, no manual `:set filetype`.
+
 `transport = "auto"` sends to the in-vim `:terminal` REPL if one is open,
 otherwise to an external HOL session tailing the Vimhol fifo. If no reader
 is attached, the warning names the fifo and the exact recipe to start one
@@ -43,7 +60,7 @@ it) — and creates the fifo, so the pasted command finds a working pipe.
 REPLs started by `\x` get Vimhol loaded automatically — no `~/.hol-config.sml`
 needed. The bootstrap is a guarded `use`: if your hol-config (or `$HOL_CONFIG`)
 already loads Vimhol it does nothing, and it announces itself with a
-`holnvim: vimhol ready` line once the session can take fifo-routed sends.
+`hol4nvim: vimhol ready` line once the session can take fifo-routed sends.
 
 ## Keymaps
 

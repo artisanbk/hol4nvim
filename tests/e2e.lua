@@ -11,9 +11,9 @@ vim.o.swapfile = false
 vim.cmd.edit((assert(_G.arg[1], "usage: ... -l tests/e2e.lua <XScript.sml>")))
 t.check("filetype detected", vim.bo.filetype == "hol4script")
 
-local repl = require("holnvim.repl")
+local repl = require("hol4nvim.repl")
 
--- record holnvim's own reporting (and surface it in the test log)
+-- record hol4nvim's own reporting (and surface it in the test log)
 local notifications = {}
 vim.notify = function(msg, level)
 	table.insert(notifications, msg)
@@ -87,7 +87,7 @@ end
 -- match: the sentinel source is split with ^). Then give Vimhol's fifo tail
 -- a moment to attach -- otherwise the first multi-line send falls back to
 -- the echoed pty path.
-wait_for("REPL ready (vimhol bootstrapped)", "holnvim: vimhol ready", 90000)
+wait_for("REPL ready (vimhol bootstrapped)", "hol4nvim: vimhol ready", 90000)
 vim.wait(2000)
 
 -- \l : load deps from the open line; full HOLLoad shape also executes the

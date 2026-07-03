@@ -1,6 +1,6 @@
 --[[
   Per-buffer setup for HOL4 script files. Runs on every hol4script buffer.
-  Keymaps live in lua/holnvim/keymaps.lua; buffer-local options belong here.
+  Keymaps live in lua/hol4nvim/keymaps.lua; buffer-local options belong here.
 --]]
 
 --[[
@@ -13,8 +13,8 @@ end
 
 vim.b.did_ftplugin = true
 
-require("holnvim.keymaps").attach()
-require("holnvim.abbrev").attach() -- no-op unless config.abbreviations
+require("hol4nvim.keymaps").attach()
+require("hol4nvim.abbrev").attach() -- no-op unless config.abbreviations
 
 --[[
   Highlighting (ROADMAP Phase 5): prefer the tree-sitter holscript parser
