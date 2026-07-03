@@ -518,6 +518,18 @@ do
 	repl.config = save
 end
 
+-- holdir alone must configure the binary too: which_hol falls back to
+-- <config.holdir>/bin/hol ahead of $HOLDIR / $PATH
+do
+	local save_cmd, save_dir, save_env = repl.config.hol_cmd, repl.config.holdir, vim.env.HOLDIR
+	repl.config.hol_cmd, repl.config.holdir, vim.env.HOLDIR = nil, fake_root, nil
+	t.check(
+		"which_hol derives bin/hol from config.holdir",
+		repl.which_hol() == fake_root .. "/bin/hol"
+	)
+	repl.config.hol_cmd, repl.config.holdir, vim.env.HOLDIR = save_cmd, save_dir, save_env
+end
+
 -- which_hol tolerates hol_cmd naming a directory (bin/ or the HOL root)
 do
 	local save = repl.config.hol_cmd

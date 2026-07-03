@@ -16,7 +16,8 @@ See [ROADMAP.md](ROADMAP.md) for parity status with the upstream vim config.
       -- defaults shown; all optional
       hol_cmd = nil,          -- explicit hol binary (a directory works too:
                               -- bin/ or the HOL root); else .HOLMK/lastmaker,
-                              -- then $HOLDIR/bin/hol, then hol on $PATH
+                              -- then <holdir>/bin/hol, then $HOLDIR/bin/hol,
+                              -- then hol on $PATH
       holdir = nil,           -- HOL installation root; else derived from the
                               -- hol binary being run, else $HOLDIR. Used for
                               -- holdeptool (\l) and the default fifo path
@@ -38,6 +39,12 @@ See [ROADMAP.md](ROADMAP.md) for parity status with the upstream vim config.
 
 Path options (`hol_cmd`, `holdir`, `fifo`, a string `vimhol`) may use `~`;
 it is expanded by `setup()`.
+
+In practice the whole config is `holdir` — the hol binary, holdeptool,
+the fifo, and vimhol.sml all derive from it — and even `holdir` only when
+`hol` is not already discoverable ($PATH, lastmaker, $HOLDIR). A complete
+copy-paste-able init is in
+[examples/user-init.lua](examples/user-init.lua).
 
 ### Filetype detection
 

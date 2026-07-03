@@ -326,7 +326,10 @@ environment variables, nothing copied by hand.
     default now route through it (7a discovery will too). One
     `holdir = "..."` line in the lazy spec (or nothing at all when hol is
     discoverable) configures everything; the README setup section no longer
-    asks for environment variables.
+    asks for environment variables. The derivation also runs in reverse:
+    `which_hol()` consults `<config.holdir>/bin/hol` ahead of `$HOLDIR`
+    and `$PATH`, so `holdir` alone selects the REPL binary too (gap found
+    while writing `examples/user-init.lua`).
 -   [x] **7c --- external-session recipe.** The fifo transport targets a
     HOL the plugin did not spawn, so it cannot bootstrap it --- instead the
     failure is actionable: the "no fifo reader" warning names the resolved

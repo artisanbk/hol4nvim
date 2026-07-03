@@ -69,6 +69,15 @@ M.which_hol = function()
 		return lm
 	end
 
+	-- config.holdir is the documented "set one thing" option: the binary
+	-- must derive from it too (NOT via M.holdir(), which calls back here)
+	if M.config.holdir and M.config.holdir ~= "" then
+		local hol = M.config.holdir .. "/bin/hol"
+		if vim.fn.executable(hol) == 1 then
+			return hol
+		end
+	end
+
 	local holdir = vim.env.HOLDIR
 	if holdir and holdir ~= "" then
 		local hol = holdir .. "/bin/hol"
