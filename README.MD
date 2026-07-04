@@ -1,5 +1,7 @@
 # hol4nvim
 
+[![CI](https://github.com/artisanbk/hol4nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/artisanbk/hol4nvim/actions/workflows/ci.yml)
+
 A port of the default vim configuration shipped with [HOL4](https://hol-theorem-prover.org/)
 (`tools/editor-modes/vim/`) to Neovim, for users of [lazy.nvim](https://github.com/folke/lazy.nvim).
 
@@ -10,6 +12,7 @@ See [ROADMAP.md](ROADMAP.md) for parity status with the upstream vim config.
 ```lua
 {
   "artisanbk/hol4nvim",
+  version = "*", -- install the latest stable tag (omit to track master)
   ft = "hol4script", -- lazy-load on HOL4 script files; see "Filetype detection"
   build = "make parsers", -- compile the tree-sitter syntax tier (needs cc;
                           -- optional: without it the regex tier loads instead)

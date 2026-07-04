@@ -12,6 +12,7 @@
 
 return {
 	"artisanbk/hol4nvim",
+	version = "*", -- install the latest stable tag (omit to track master)
 	ft = "hol4script", -- lazy-load on *Script.sml buffers (see README)
 	build = "make parsers", -- compile the tree-sitter syntax tier (needs cc;
 	-- optional: without it the regex tier loads instead)
