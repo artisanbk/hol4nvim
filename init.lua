@@ -11,7 +11,8 @@
 --]]
 
 -- Leaders must be set before any plugin/keymap loads. <localleader> drives the
--- HOL keymaps; with "\\" the bindings are \x \X \s \e. Change to taste.
+-- HOL keymaps; with localleader "h" (HOL's convention) the bindings are hx hX
+-- hs he. Change to taste.
 vim.g.mapleader = " "
 vim.g.maplocalleader = "h"
 

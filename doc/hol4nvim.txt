@@ -1,0 +1,399 @@
+*hol4nvim.txt*            HOL4 interactive theorem proving inside Neovim
+
+
+                 _           _  _  _                _                     ~
+                | |__   ___ | || || |  _ ____   __ (_) _ __ ___          ~
+                | '_ \ / _ \| || || | | '_ \ \ / /| || '_ ` _ \         ~
+                | | | | (_) | || || | | | | \ V / | || | | | | |        ~
+                |_| |_|\___/|_||_||_| |_| |_|\_/  |_||_| |_| |_|        ~
+
+
+A port of the Vim configuration shipped with HOL4 (`tools/editor-modes/vim/`)
+to Neovim, for users of lazy.nvim.
+
+==============================================================================
+CONTENTS                                                   *hol4nvim-contents*
+
+    1. Introduction ....................... |hol4nvim-introduction|
+    2. Requirements ....................... |hol4nvim-requirements|
+    3. Installation ....................... |hol4nvim-installation|
+    4. Configuration ...................... |hol4nvim-configuration|
+    5. Filetype detection ................. |hol4nvim-filetype|
+    6. Mappings ........................... |hol4nvim-mappings|
+    7. Commands ........................... |hol4nvim-commands|
+    8. Search ............................. |hol4nvim-search|
+    9. Completion ......................... |hol4nvim-completion|
+   10. Syntax highlighting ................ |hol4nvim-syntax|
+   11. Transport .......................... |hol4nvim-transport|
+   12. Health check ....................... |hol4nvim-health|
+   13. Troubleshooting .................... |hol4nvim-troubleshooting|
+
+==============================================================================
+1. INTRODUCTION                                        *hol4nvim-introduction*
+
+hol4nvim drives a HOL4 interactive session from Neovim: send lines, tactics,
+goals, and whole documents to a REPL; run the proof manager; and highlight
+`*Script.sml` files. It is a standalone lazy.nvim plugin, not part of the HOL4
+source tree, and aims for full parity with HOL4's upstream Vim config plus
+out-of-the-box setup (no dotfiles or exported environment variables).
+
+HOL4: https://hol-theorem-prover.org/
+
+==============================================================================
+2. REQUIREMENTS                                        *hol4nvim-requirements*
+
+- Neovim 0.10+ (uses `vim.treesitter`, `vim.uv`, `vim.health`).
+- A working HOL4 install. hol4nvim finds the `hol` binary via, in order:
+  `config.hol_cmd`, a `.HOLMK/lastmaker` beside the edited file,
+  `config.holdir`, `$HOLDIR/bin/hol`, then `hol` on `$PATH`.
+- A C compiler (`cc`), only for the tree-sitter syntax tier. Without it the
+  regex highlighting tier is used instead. See |hol4nvim-syntax|.
+- nvim-cmp, only for insert-mode completion. Optional. See
+  |hol4nvim-completion|.
+
+Nothing else needs configuring by hand: |hol4nvim| loads Vimhol into the
+REPLs it starts, and ships its own filetype detection and syntax.
+
+==============================================================================
+3. INSTALLATION                                        *hol4nvim-installation*
+
+With lazy.nvim (https://github.com/folke/lazy.nvim): >
+
+    {
+      "artisanbk/hol4nvim",
+      ft = "hol4script",        -- lazy-load on HOL4 script files
+      build = "make parsers",   -- compile the tree-sitter tier (needs cc;
+                                -- optional: regex tier loads without it)
+      config = function()
+        require("hol4nvim").setup({
+          -- see |hol4nvim-configuration| for all options; all optional
+        })
+      end,
+    }
+<
+A complete, copy-paste-able init lives in `examples/user-init.lua` in the
+repository.
+
+Set `<localleader>` before plugins load if you want maps other than the
+default `\` prefix, e.g. `vim.g.maplocalleader = " "`. Be aware that a prefix
+equal to your leader can introduce a |timeoutlen| delay; run |:checkhealth|
+`hol4nvim` to detect it. See |hol4nvim-troubleshooting|.
+
+==============================================================================
+4. CONFIGURATION                                      *hol4nvim-configuration*
+
+Pass options to `require("hol4nvim").setup({...})`. Defaults shown; every
+option is optional. Path options (`hol_cmd`, `holdir`, `fifo`, a string
+`vimhol`) may use `~`; setup() expands it.
+
+                                                        *hol4nvim-opt-hol_cmd*
+hol_cmd                    nil ~
+        Explicit hol binary. A directory works too (the `bin/` dir or the HOL
+        root). When nil, discovery falls back to lastmaker, then `holdir`,
+        then `$HOLDIR/bin/hol`, then `hol` on `$PATH`.
+
+                                                         *hol4nvim-opt-holdir*
+holdir                     nil ~
+        HOL installation root. When nil it is derived from the hol binary
+        being run, else `$HOLDIR`. Used for holdeptool (|hol4nvim-hl|), the
+        default fifo path, and locating vimhol.sml. In practice this is the
+        only option most users set -- and only when hol is not already
+        discoverable.
+
+                                                          *hol4nvim-opt-split*
+split                      "vertical" ~
+        REPL window placement: "vertical" or "horizontal".
+
+                                                   *hol4nvim-opt-start_insert*
+start_insert               false ~
+        Focus the REPL in insert mode after |hol4nvim-hx|.
+
+                                                      *hol4nvim-opt-transport*
+transport                  "auto" ~
+        How send() delivers: "auto" | "terminal" | "fifo". See
+        |hol4nvim-transport|.
+
+                                                           *hol4nvim-opt-fifo*
+fifo                       nil ~
+        Explicit fifo path. When nil: `$VIMHOL_FIFO`, else
+        `<holdir>/tools/editor-modes/vim/fifo`.
+
+                                                         *hol4nvim-opt-vimhol*
+vimhol                     true ~
+        Auto-load vimhol.sml into REPLs started by |hol4nvim-hx| (skipped if
+        your hol-config already loads it). false disables the bootstrap; a
+        string is an explicit path to vimhol.sml.
+
+                                                        *hol4nvim-opt-keymaps*
+keymaps                    true ~
+        false disables all buffer-local keymaps.
+
+                                                         *hol4nvim-opt-prefix*
+prefix                     "<localleader>" ~
+        Keymap prefix. Any prefix equal to your `mapleader` can cost a
+        |timeoutlen| delay when a longer leader map shares it; see
+        |hol4nvim-troubleshooting|.
+
+                                                  *hol4nvim-opt-abbreviations*
+abbreviations              false ~
+        Enable holabs ASCII->unicode insert-mode abbreviations (type `/\`,
+        `\/`, `==>`, `<=>`, `!`, `?`, `IN`, `SUBSET`, ... then space to get
+        `∧ ∨ ⇒ ⇔ ∀ ∃ ∈ ⊆`).
+
+==============================================================================
+5. FILETYPE DETECTION                                      *hol4nvim-filetype*
+
+The plugin ships `ftdetect/hol4script.lua`: a `vim.filetype.add` pattern maps
+`*Script.sml` to the `hol4script` filetype. Pattern matches take precedence
+over extension matches, so HOL script files win over Neovim's built-in
+`*.sml` -> `sml` while ordinary SML files are left alone.
+
+With `ft = "hol4script"` in the lazy spec, lazy.nvim sources the plugin's
+ftdetect eagerly at startup but loads the plugin itself only when the first
+HOL4 script buffer opens. Nothing needs configuring -- no autocmds, no manual
+`:set filetype`.
+
+==============================================================================
+6. MAPPINGS                                                *hol4nvim-mappings*
+
+Buffer-local on `hol4script` buffers (`*Script.sml`). The prefix is
+`<localleader>`; following HOL's convention these examples set it to `h`
+(`vim.g.maplocalleader = "h"`), shown below as `h`. Send-style maps act on the
+current line (normal mode) or the selection (visual mode); SML `(* ... *)`
+comments are stripped before sending, and comment-only selections are not
+sent.
+
+Session ~
+                                                                *hol4nvim-hx*
+    hx      Start a HOL REPL in a split.
+                                                                *hol4nvim-hX*
+    hX      Close the current REPL (sends Ctrl-D).
+
+Sending ~
+                                                                *hol4nvim-hs*
+    hs      Send raw SML (`hw` is an alias).
+                                                                *hol4nvim-hu*
+    hu      Send quietly (wrapped in quietdec toggles -- no result printout).
+                                                                *hol4nvim-h!*
+    h!      Send the whole document; `open` declarations and new-style
+            `Theory`/`Ancestors`/`Libs` headers are dropped (use hl).
+
+Proof transforms ~
+                                                                *hol4nvim-he*
+    he      Apply as a tactic to the current goal (proofManagerLib.expand).
+                                                                *hol4nvim-hg*
+    hg      Set as the goal -- include the backquotes (proofManagerLib.g).
+                                                                *hol4nvim-hG*
+    hG      Set an unquoted goal from Theorem-statement + `Proof` lines.
+                                                                *hol4nvim-hS*
+    hS      Prove as a subgoal; a trailing `by ...` is stripped (bossLib.sg).
+                                                                *hol4nvim-hF*
+    hF      Suffices-to-show; a trailing `suffices_by ...` is stripped.
+                                                                *hol4nvim-hP*
+    hP      Apply to pattern-selected subgoals (Q.SELECT_GOAL_LT).
+                                                                *hol4nvim-hl*
+    hl      Run holdeptool over the text, `load` each dependency, execute the
+            text quietly, print `HOLLoad ... completed`.
+
+Proof-manager control ~
+                                                                *hol4nvim-hb*
+    hb hB   Back up a proof step / restore save point (a count repeats).
+    hv hd   Save proof state / drop current goal (count repeats hd).
+    hp hr   Print current proof state / restart the goal.
+    hR      Rotate subgoals (count = how far).
+                                                                *hol4nvim-hc*
+    hc      Interrupt the running tactic (via the Vimhol fifo, else Ctrl-C).
+
+Selection helpers ~
+    ht hT   Select the enclosing `term` / ``term``.
+    ha      Select the theorem statement + `Proof` lines (feed it to hG).
+
+Search ~ (see |hol4nvim-search|)
+                                                                *hol4nvim-hf*
+    hf      Open a search panel: theorems by name (DB.find).
+                                                                *hol4nvim-hm*
+    hm      Open a search panel: theorems by term (DB.apropos); visual mode
+            seeds the query bar with the selection.
+
+Display toggles ~
+    hy hn   Toggle `show_types` / unicode pretty-printing.
+
+Passthrough ~
+    hh      Pass-through `h` (so `hh` moves left when `<localleader>` is `h`).
+
+==============================================================================
+7. COMMANDS                                                *hol4nvim-commands*
+
+                                                                  *:HolStart*
+:HolStart               Start a HOL4 REPL beside the current file.
+                                                                   *:HolStop*
+:HolStop                Close the current HOL4 REPL.
+                                                                   *:HolSend*
+:[range]HolSend         Send the current line, or the range/selection.
+                                                           *:HolSendDocument*
+:HolSendDocument        Send the whole buffer (open lines dropped).
+                                                              *:HolUnabbrev*
+:[range]HolUnabbrev     Replace HOL unicode with ASCII (whole buffer, or a
+                        range).
+                                                                   *:HolFind*
+:HolFind [name]         Search theorems by name (DB.find); prompts if no arg.
+                                                                  *:HolMatch*
+:HolMatch [term]        Search theorems by term pattern (DB.apropos).
+                                                     *:HolCompletionRefresh*
+:HolCompletionRefresh   Resnapshot theorem names for completion from the
+                        live session.
+                                                      *:HolCompletionToggle*
+:HolCompletionToggle    Turn insert-mode completion off/on at runtime.
+
+==============================================================================
+8. SEARCH                                                    *hol4nvim-search*
+
+`hf` / |:HolFind| and `hm` / |:HolMatch| open a search PANEL: a horizontal
+split of the focused window whose top line names the search type, with an
+editable query bar below it. Type a query and press <CR> to run it; the
+results fill the panel, and editing the bar and pressing <CR> again re-runs.
+Press <CR> on a result line to insert that theorem's name at the cursor in the
+window you searched from (also yanked to the unnamed register). `q` closes the
+panel. `hf` searches names (DB.find); `hm` searches by term pattern
+(DB.apropos), and in visual mode seeds the bar with the selection. The bar
+starts pre-filled with the word under the cursor. |:HolFind| {name} /
+|:HolMatch| {term} run a search immediately.
+
+The plugin's transport is one-way -- it can send to HOL but not read answers
+back -- so a search is SML that writes its formatted results
+(Parse.thm_to_string) to a temp file, which Neovim polls for a completion
+sentinel and renders (holterm-highlighted when the grammar is built). A search
+needs a running session (start one with `hx`); a term pattern that fails to
+parse reports the error instead of hanging.
+
+==============================================================================
+9. COMPLETION                                            *hol4nvim-completion*
+
+Insert-mode completion in `hol4script` buffers, delivered as an nvim-cmp
+source (https://github.com/hrsh7th/nvim-cmp -- add it to the plugin's
+dependencies). Two vocabularies:
+
+- HOL tactics/tacticals: a curated static list (rw, simp, the drule family,
+  qexists_tac, Induct_on, the tacticals, ...). Needs no running REPL.
+- Theorem names: snapshotted from the session's DB.listDB() (public theorems
+  only), so completion tracks whatever theories are loaded.
+
+With `completion.auto_setup = true` (default) the source is registered and
+added to the `hol4script` filetype's cmp sources automatically, so with
+nvim-cmp installed the popup appears as you type. Accepting a theorem
+completion inserts the bare name (e.g. ADD_ASSOC), matching how the search
+panel picks a result.
+
+The transport is one-way, so theorem names are not queried per keystroke: the
+cache is snapshotted and refreshed when a REPL starts, after |hol4nvim-hl|
+loads dependencies, and on demand with |:HolCompletionRefresh|. An enumeration
+SML writes the names to a temp file the plugin polls -- the same round-trip
+Search uses. Until the first refresh completes, only the tactics show.
+
+Options live under `completion` in |setup()|: `enabled` (master switch;
+|:HolCompletionToggle| flips it at runtime), `auto_setup`, `tactics`, and
+`theorems` (the last two toggle the two vocabularies). Set `enabled = false`,
+or omit nvim-cmp, to skip completion entirely. |:checkhealth| `hol4nvim`
+reports whether nvim-cmp is present and how many names are cached.
+
+==============================================================================
+10. SYNTAX HIGHLIGHTING                                      *hol4nvim-syntax*
+
+Two tiers, chosen automatically per buffer.
+
+tree-sitter (preferred) ~
+        Self-contained grammars ship in-repo under `grammar/*/`; each
+        generated `parser.c` is vendored, so building needs only a C
+        compiler. The spec's `build = "make parsers"` hook compiles them into
+        `parser/*.so`, and the ftplugin uses them whenever they exist. No
+        nvim-treesitter is needed: Neovim core reads `parser/` and `queries/`
+        straight off the plugin's runtimepath.
+
+        The grammars assign only standard capture names (`@keyword`,
+        `@string`, `@operator`, ...); your colorscheme maps those to colours.
+        The plugin never sets a colour. Inspect a token with |:Inspect|; view
+        the tree with |:InspectTree|.
+
+        Script structure highlights (`Theorem..Proof..QED`,
+        `Definition..End`, `Datatype`, `(Co)Inductive`, `Type`/`Overload`,
+        `Theory`/`Ancestors`/`Libs`, quotations, strings, nested comments),
+        and block interiors are injected into real grammars: plain ML and
+        tactic bodies into vendored tree-sitter-sml; term bodies and
+        quotation interiors into `holterm`, a small lenient grammar for the
+        HOL term language.
+
+regex (fallback) ~
+        `syntax/hol4script.vim`, a verbatim port of upstream's highlighting.
+        Zero requirements; loads whenever the parser is not built. Its
+        limitations (block keywords only at column 0, whole-file rescans,
+        fixed term vocabulary, mixable quote delimiters) are inherited from
+        upstream unchanged.
+
+Folds (tree-sitter tier, opt-in): >
+
+    setlocal foldmethod=expr foldexpr=v:lua.vim.treesitter.foldexpr()
+<
+cover `Definition`/`Datatype`/`Inductive..End` as well as `Proof..QED`.
+
+==============================================================================
+11. TRANSPORT                                             *hol4nvim-transport*
+
+`transport = "auto"` sends to the in-vim `:terminal` REPL when one is open,
+otherwise to an external HOL session tailing the Vimhol fifo. If no reader is
+attached, the warning names the fifo and the exact recipe to start one
+(`VIMHOL_FIFO='<path>' hol` plus a guarded `use` of vimhol.sml), and creates
+the fifo so the pasted command finds a working pipe.
+
+REPLs started by |hol4nvim-hx| get Vimhol loaded automatically -- no
+`~/.hol-config.sml` needed. The bootstrap is a guarded `use`: if your
+hol-config already loads Vimhol it does nothing, and it announces itself with
+a `hol4nvim: vimhol ready` line once the session can take fifo-routed sends.
+
+==============================================================================
+12. HEALTH CHECK                                             *hol4nvim-health*
+
+                                                       *:checkhealth-hol4nvim*
+Run |:checkhealth| `hol4nvim` to diagnose a setup. It re-runs the plugin's own
+resolvers and reports, naming the exact `setup()` option to set on any
+failure:
+
+- the resolved hol binary, HOL root, holdeptool, and vimhol.sml;
+- the fifo path, whether it exists, and whether a reader is attached;
+- whether the tree-sitter parsers (holscript, holterm, sml) are built and
+  loadable, or an ABI mismatch prevents loading;
+- whether nvim-cmp is present for completion and how many theorem names are
+  cached;
+- keymap prefix vs leader collisions that force a |timeoutlen| wait (see
+  |hol4nvim-troubleshooting|).
+
+==============================================================================
+13. TROUBLESHOOTING                                 *hol4nvim-troubleshooting*
+
+Delay after pressing a hol map (e.g. `hs`, `he`) ~
+        If your |hol4nvim-opt-prefix| equals your `mapleader`, and you also
+        have a longer global mapping that starts with the same prefix (e.g.
+        `<leader>sx` when a hol map is `<leader>s`), Neovim waits |timeoutlen|
+        on every hol map to see whether the longer map is coming. Fixes:
+        - raise |timeoutlen|;
+        - set |hol4nvim-opt-prefix| off your mapleader (e.g. "<localleader>");
+        - remove or shorten the colliding global maps.
+        Run |:checkhealth| `hol4nvim` -- it lists the exact colliding maps.
+
+No syntax highlighting differences from the regex tier ~
+        The tree-sitter parsers are probably not built. Add
+        `build = "make parsers"` to the lazy spec, or run `make parsers` in
+        the plugin directory (needs a C compiler). Confirm with |:checkhealth|
+        `hol4nvim` and |:InspectTree|.
+
+"no hol binary found" / "not executable" ~
+        Set |hol4nvim-opt-hol_cmd| to the hol binary (a directory works too),
+        or |hol4nvim-opt-holdir| to your HOL root. |:checkhealth| `hol4nvim`
+        shows what was tried.
+
+Multi-line sends or `hc` behave oddly ~
+        These use the Vimhol fifo. Check |:checkhealth| `hol4nvim`: the
+        vimhol.sml and fifo sections should be OK. With `vimhol = false` the
+        auto-bootstrap is off and both degrade to the raw pty.
+
+==============================================================================
+vim:tw=78:ts=8:et:ft=help:norl:

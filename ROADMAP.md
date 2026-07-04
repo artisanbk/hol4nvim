@@ -31,7 +31,7 @@ Upstream reference (HOL4 source tree):
 -   `ftdetect/hol4script.lua` --- filetype detection.
 
 This is already an improvement over upstream, which hard-splits the terminal
-path (`\w`) from the fifo path (`\s` and the `HOLCall` C-channel). Here a
+path (`hw`) from the fifo path (`hs` and the `HOLCall` C-channel). Here a
 single `send()` picks the transport, so every transform and command routes
 through it.
 
@@ -47,14 +47,14 @@ Other deliberate divergences from upstream:
     line number instead of surfacing as a bogus missing-QED warning. Multi-line
     comments can contain `Theorem`/`QED`-looking lines that confuse hol's
     line-oriented filter mid-paste; upstream sends them raw.
--   `\!` / `:HolSendDocument` sends the whole buffer in one batch, dropping
-    `open` declarations (they fail interactively for unloaded theories; `\l`
+-   `h!` / `:HolSendDocument` sends the whole buffer in one batch, dropping
+    `open` declarations (they fail interactively for unloaded theories; `hl`
     covers them). No upstream equivalent.
 -   The terminal transport auto-routes MULTI-LINE sends through the session's
     own Vimhol pipe (tempfile + `ReadFile`, i.e. `QUse.use` script parsing)
     when a reader is attached, falling back to raw pty input otherwise. Raw pty
     batches glue `;`-less statements and can wedge hol's filter at `#`;
-    upstream avoids this only by hard-splitting `\s` (fifo) from `\w` (pty).
+    upstream avoids this only by hard-splitting `hs` (fifo) from `hw` (pty).
 -   Visual selections are read live via `getregion()` while visual mode is
     still active; upstream's `:call` maps rely on `:` having exited visual mode
     first.
@@ -68,33 +68,35 @@ Other deliberate divergences from upstream:
 | Capability | Upstream | hol4nvim | Status |
 |--------------------|--------------------|--------------------|--------------------|
 | Filetype detection | `filetype.vim` | `ftdetect/hol4script.lua` | ✅ |
-| REPL open / close | `\x` / `\X` | `repl.open` / `repl.close` | ✅ |
+| REPL open / close | `hx` / `hX` | `repl.open` / `repl.close` | ✅ |
 | HOL discovery (lastmaker/\$HOLDIR) | `WhichHOL` | `which_hol` | ✅ |
 | Session stack + prune on exit | `g:hol_repl` | `M.sessions` | ✅ |
 | Dual transport (terminal + fifo) | split mappings | `transport="auto"` | ✅ (better) |
-| Send raw line / selection | `\s` `\w` | `\s` (`\w` alias) | ✅ |
-| Quiet send | `\u` | `\u` (`transform.quiet`) | ✅ |
-| Send whole document | --- | `\!` / `:HolSendDocument` (opens dropped) | ✅ (extension) |
-| Expand tactic | `\e` | `\e` (strips `>>`/`THEN`/`\\`/`by`... at the ends) | ✅ |
-| Set goal | `\g` | `\g` (`transform.goal`) | ✅ |
-| Unquoted goal | `\G` | `\G` (`transform.uqgoal`; Proof\[attrs\] + Resume headers) | ✅ |
-| Subgoal | `\S` | `\S` (`transform.subgoal`) | ✅ |
-| Suffices | `\F` | `\F` (`transform.suffices`) | ✅ |
-| Pattern goal | `\P` | `\P` (`transform.pattern`, same token-stripping) | ✅ |
-| Load deps | `\l` | `\l` (loads + quiet exec of selection + "completed") | ✅ |
-| Multi-line via tempfile + fifo | `\s` (HOLCEnd) | terminal transport auto-routes multi-line sends through the session's Vimhol pipe | ✅ |
-| Proof-manager controls | `\b \B \v \d \p \r \R \c` | same letters; counts repeat b/B/d, count is R's arg | ✅ |
-| Selection helpers | `\t \T \a` | `hol4nvim/select.lua`, same letters | ✅ |
-| Display toggles | `\y \n` | `repl.toggle_types` / `repl.toggle_unicode` | ✅ |
+| Send raw line / selection | `hs` `hw` | `hs` (`hw` alias) | ✅ |
+| Quiet send | `hu` | `hu` (`transform.quiet`) | ✅ |
+| Send whole document | --- | `h!` / `:HolSendDocument` (opens and new-style `Theory`/`Ancestors`/`Libs` headers dropped -- their interactive meaning is opens of possibly-unloaded theories, i.e. `hl` territory) | ✅ (extension) |
+| Expand tactic | `he` | `he` (strips `>>`/`THEN`/`\\`/`by`... at the ends) | ✅ |
+| Set goal | `hg` | `hg` (`transform.goal`) | ✅ |
+| Unquoted goal | `hG` | `hG` (`transform.uqgoal`; Proof\[attrs\] + Resume headers) | ✅ |
+| Subgoal | `hS` | `hS` (`transform.subgoal`) | ✅ |
+| Suffices | `hF` | `hF` (`transform.suffices`) | ✅ |
+| Pattern goal | `hP` | `hP` (`transform.pattern`, same token-stripping) | ✅ |
+| Load deps | `hl` | `hl` (loads + quiet exec of selection + "completed"); new-style `Theory`/`Ancestors`/`Libs` headers work — holdeptool maps Ancestors to `<x>Theory` and Libs verbatim (verified against Trindemossen holdeptool) | ✅ |
+| Multi-line via tempfile + fifo | `hs` (HOLCEnd) | terminal transport auto-routes multi-line sends through the session's Vimhol pipe | ✅ |
+| Proof-manager controls | `hb hB hv hd hp hr hR hc` | same letters; counts repeat b/B/d, count is R's arg | ✅ |
+| Selection helpers | `ht hT ha` | `hol4nvim/select.lua`, same letters | ✅ |
+| Display toggles | `hy hn` | `repl.toggle_types` / `repl.toggle_unicode` | ✅ |
 | Unicode abbreviations | `holabs.vim` (opt-in) | `hol4nvim/abbrev.lua`, `abbreviations = true` + `:HolUnabbrev` | ✅ |
-| Syntax highlighting | `hol4script.vim` | `syntax/hol4script.vim` (5a regex parity; tree-sitter 5b/5c pending) | 🟡 |
+| Syntax highlighting | `hol4script.vim` | `syntax/hol4script.vim` (5a regex fallback) + `holscript` tree-sitter grammar (5b: script structure, indented blocks, matched quote delimiters, incremental reparse) + injections (5c: SML into ML/tactics, `holterm` into terms/quotations) | ✅ |
+| Theorem search | --- | `hf` `hm` / `:HolFind` `:HolMatch` (`search.lua`): `DB.find` name + `DB.apropos` term search in an interactive panel | ✅ (Phase 8) |
+| Insert-mode completion | --- | `completion.lua` + `cmp.lua`: nvim-cmp source of static HOL tactics + live theorem names (`DB.listDB`), refreshed off `HolReplStarted`/`HolLoaded`; `:HolCompletionToggle` / `:HolCompletionRefresh` | ✅ (Phase 9) |
 
 Test infrastructure (not an upstream feature, but load-bearing here):
 `make test` = `tests/unit.lua` (HOL-free: ftdetect, commands, transforms,
 fifo.path priority, keymaps) + `tests/e2e.lua` (drives a real hol REPL in a
 `:terminal`). Two example files: `examples/TestScript.sml` is the guided keymap
 tour (deliberately bare fragments --- NOT batch-sendable) and
-`examples/WholeScript.sml` is the linear `\!`/whole-file-send demo; the e2e
+`examples/WholeScript.sml` is the linear `h!`/whole-file-send demo; the e2e
 drives both.
 
 ## Phases
@@ -105,21 +107,21 @@ drives both.
     (data-driven spec table + `attach()`); `ftplugin/hol4script.lua` just calls
     it.
 -   [x] Keymap scheme reconciled with upstream letters. Intentional divergence:
-    upstream's `\w` (terminal send) and `\s` (fifo send) collapse into one
-    transport-agnostic send on `\s`, with `\w` kept as an alias.
+    upstream's `hw` (terminal send) and `hs` (fifo send) collapse into one
+    transport-agnostic send on `hs`, with `hw` kept as an alias.
 -   [x] `config` surface settled and documented in README (hol_cmd, split,
     start_insert, transport, fifo, keymaps, prefix).
 
 ### Phase 1 --- Proof transforms (highest daily value)
 
 Pure additions to `transform.lua`, each wired to a keymap + routed through
-`send()`. - \[x\] `\g` goal --- `proofManagerLib.g(...)` (strips trailing
-commas/whitespace) - \[x\] `\S` subgoal ---
+`send()`. - \[x\] `hg` goal --- `proofManagerLib.g(...)` (strips trailing
+commas/whitespace) - \[x\] `hS` subgoal ---
 `proofManagerLib.expand(bossLib.sg(...))`, strips trailing `by ...` - \[x\]
-`\F` suffices --- `proofManagerLib.expand(bossLib.qsuff_tac(...))`, strips
-`suffices_by ...` - \[x\] `\P` pattern ---
+`hF` suffices --- `proofManagerLib.expand(bossLib.qsuff_tac(...))`, strips
+`suffices_by ...` - \[x\] `hP` pattern ---
 `proofManagerLib.expand_list(Q.SELECT_GOAL_LT(...))` (token-stripping deferred
-to Phase 3, same as `\e`) - \[x\] `\G` unquoted goal --- statement +
+to Phase 3, same as `he`) - \[x\] `hG` unquoted goal --- statement +
 `Proof[attrs]` lines via `proofManagerLib.new_goalstack` /
 `BasicProvers.mk_tacmod`, and `Resume <thm>[<label>]:` headers via
 `markerLib.set_suspended_goal`
@@ -129,9 +131,9 @@ Phase 1 complete ✅
 ### Phase 2 --- Proof-manager control commands
 
 Thin `repl.lua` wrappers sending literal `proofManagerLib.*` strings via
-`send()`. - \[x\] `\b` backup · `\B` restore · `\v` save · `\d` drop · `\p` p()
-· `\r` restart (a count repeats b/B/d, upstream HOLRepeat semantics) - \[x\]
-`\R` rotate --- honours a count (`v:count1`) - \[x\] `\c` Interrupt ---
+`send()`. - \[x\] `hb` backup · `hB` restore · `hv` save · `hd` drop · `hp` p()
+· `hr` restart (a count repeats b/B/d, upstream HOLRepeat semantics) - \[x\]
+`hR` rotate --- honours a count (`v:count1`) - \[x\] `hc` Interrupt ---
 "Interrupt" line to the session's Vimhol pipe, else the global fifo, else
 CTRL-C into the pty (SIGINT; beyond upstream)
 
@@ -139,12 +141,12 @@ Phase 2 complete ✅
 
 ### Phase 3 --- Send refinements
 
--   [x] `\u` quiet send --- wrap in `HOL_Interactive.toggle_quietdec()` toggles
+-   [x] `hu` quiet send --- wrap in `HOL_Interactive.toggle_quietdec()` toggles
 -   [x] Expand/pattern token-stripping --- leading/trailing
     `THEN[1L]`/`>>`/`>>~`/ `\\`/`>-`/`>|`/`>~`/`++`/`<<`/`by`/`,`/brackets are
-    stripped (port of `s:strip*`), so `\e` on a whole `>> tac` proof line just
+    stripped (port of `s:strip*`), so `he` on a whole `>> tac` proof line just
     works
--   [x] Full `\l` load parity --- loads, then the selection itself executed
+-   [x] Full `hl` load parity --- loads, then the selection itself executed
     inside quietdec toggles, then a `HOLLoad ... completed` confirmation print
 
 Phase 3 complete ✅
@@ -156,10 +158,10 @@ Phase 3 complete ✅
     is opt-in too: you source holabs.vim yourself)
 -   [x] `:HolUnabbrev` command --- reverse Unicode → ASCII (port `HOLUnab`;
     range-aware, defaults to the whole buffer where upstream is per-line)
--   [x] Selection-movement helpers (`lua/hol4nvim/select.lua`): `\t`
-    single-quote term, `\T` double-quote term, `\a` Theorem...Proof block
-    (feeds `\G`)
--   [x] Toggles: `\y` `Globals.show_types`, `\n` `PP.avoid_unicode`
+-   [x] Selection-movement helpers (`lua/hol4nvim/select.lua`): `ht`
+    single-quote term, `hT` double-quote term, `ha` Theorem...Proof block
+    (feeds `hG`)
+-   [x] Toggles: `hy` `Globals.show_types`, `hn` `PP.avoid_unicode`
 -   [x] Upstream's `no \h h` passthrough mapping (so `hh` moves left when
     `<localleader>` is `h`, the vimhol docs' convention).
 
@@ -177,18 +179,51 @@ straight off the plugin's runtimepath).
 -   [x] **5a --- regex parity (fallback tier)**: `syntax/hol4script.vim`, a
     verbatim port of upstream. Zero build requirements; its limitations
     (inherited from upstream, unchanged) are documented in the README.
--   [ ] **5b --- skeleton `holscript` tree-sitter grammar**: parses ONLY the
+-   [x] **5b --- skeleton `holscript` tree-sitter grammar**: parses ONLY the
     script-level structure --- `Theorem/Triviality ... Proof ... QED`,
     `Definition/Termination/End`, `Datatype`, `(Co)Inductive`,
     `Type`/`Overload`, quotations (`` ` ``, ` `` `, `‘’`, `“”`), `«»`
     strings, nested `(* *)` comments --- leaving everything between as
-    opaque `ml_chunk` nodes. Detailed plan below.
--   [ ] **5c --- injections**: `ml_chunk` + tactic regions → vendored
-    tree-sitter-sml (degrades gracefully if unbuilt); quotation interiors →
-    a new tiny `holterm` grammar (binders, operators, HOL keywords --- where
-    tree-sitter clearly beats regex). Stretch: register the grammar with
-    nvim-treesitter's community registry; TS folds/textobjects; reimplement
-    `\a \t \T` on tree nodes instead of regex searches.
+    opaque `ml_chunk` nodes. Detailed plan below; deltas when it landed:
+    new-style `Theory`/`Ancestors`/`Libs` headers joined the scope (their
+    `section_names` lists are a scanner token using the same
+    indented-continuation shape as `h!`'s header dropper); `attributes`
+    became an external token too (an internal regex loses to the chunk
+    externals right after `Proof`); generated at ABI 14 so Neovim 0.10
+    loads it; mismatched quote delimiters surface as a bounded
+    `quotation_mismatched` node (queried as `@error`) rather than an
+    unbounded parse error. 21 corpus tests (`make test-grammar`) + 19
+    Neovim-side checks (`make test-ts`, in `make test`).
+-   [x] **5c --- injections**: every opaque span from the 5b skeleton now
+    hands its interior to a real grammar (all best-effort --- a missing
+    `parser/<lang>.so` just leaves that span opaque):
+    - `ml_chunk` (plain ML between blocks) and `tactic_chunk` (tactics are
+      SML) → vendored [tree-sitter-sml](https://github.com/MatthewFluet/tree-sitter-sml)
+      (`grammar/sml/`, MIT, commit `558bf67`, regenerated at ABI 14; see
+      `grammar/sml/PROVENANCE.md`);
+    - `term_chunk` (Definition/Datatype/Inductive bodies) and quotation
+      interiors → `holterm` (`grammar/holterm/`), a new lenient token-stream
+      grammar for the HOL term language (binders, operators, `if/then/else`,
+      `T`/`F`, numbers, strings, type vars, `^` antiquotation, nested
+      comments). It is deliberately NOT a real expression parser: HOL's
+      concrete term grammar is user-extensible, so a token stream that never
+      errors is both the correct and the sufficient design for highlighting.
+
+    Landed deltas from the plan: quotations split into three node types by
+    delimiter WIDTH (`quotation_single` 1-byte, `quotation_double` 2-byte,
+    `quotation_unicode` 3-byte) so `injections.scm` trims delimiters with a
+    fixed per-node `#offset!` --- keeping the holscript scanner stateless
+    rather than emitting separate delimiter/content tokens. 12 holterm corpus
+    tests + 14 new Neovim-side injection checks (`tests/treesitter.lua`, now
+    33), both example files parse with zero ERROR nodes across all three
+    languages.
+
+    Stretch (still open, tracked for later): SML injection into `^(..)`
+    antiquotations; register the grammars with nvim-treesitter's community
+    registry; TS folds/textobjects; reimplement `ha ht hT` on tree nodes
+    instead of regex searches.
+
+Phase 5 complete ✅ (5c stretch items deferred, listed above)
 
 #### 5b plan
 
@@ -266,12 +301,108 @@ Sequencing:
 
 ### Phase 6 --- Polish & release
 
--   [ ] `:checkhealth hol4nvim` (hol/holdeptool/HOLDIR/fifo, transport sanity)
+The last phase: make the plugin diagnosable, documented in-editor, and
+tagged. No new user-facing behaviour --- everything here reports on or
+packages what Phases 0--7 already built. Detailed plan below.
+
+-   [x] **6a --- `:checkhealth hol4nvim`** (`lua/hol4nvim/health.lua`):
+    surfaces every discovery step (hol binary, holdir, holdeptool,
+    vimhol.sml, fifo transport, tree-sitter parsers) by re-running the
+    plugin's own resolvers, naming the exact `setup()` option on each
+    failure; plus the one setup mistake that already bit a real user ---
+    a keymap `prefix` equal to the leader with a longer global map sharing
+    it, which forces the `timeoutlen` wait (the pure `M.prefix_collisions`
+    is unit-tested). Tests: 6 HOL-free checks in `tests/unit.lua` (stubbed
+    `vim.health`) + the deferred 7d "config pre-loads Vimhol" smoke
+    graduated into the e2e tier as `tests/e2e_preload.lua` (sentinel still
+    prints, guard no-ops, pipe-routed send evaluates exactly once).
+-   [x] **6b --- `:help hol4nvim`** (`doc/hol4nvim.txt` + committed
+    `doc/tags`): vimdoc port of the README (intro, requirements, install,
+    the full config surface as `*hol4nvim-opt-*` tags, the mapping table as
+    `*hol4nvim-\<key>*` tags, commands, the two syntax tiers, transport, a
+    `:checkhealth` section, and troubleshooting). README stays the source of
+    truth; CLAUDE.md notes the drift guard.
+-   [~] **6c --- release**: `CHANGELOG.md` written (0.1.0, grouped by
+    capability) and the published spec reconciled (`examples/user-init.lua`
+    now carries `build = "make parsers"` like the README block). Remaining:
+    commit the outstanding tree (5c + 6a/6b) and cut the annotated tag once
+    `make test` is green.
 -   [x] README with install spec, config defaults, mapping table
--   [ ] `:help hol4nvim` doc
 -   [x] Tests --- `make test`: unit tier (HOL-free) + e2e tier (live REPL);
     extend both as each phase lands
--   [ ] Tag a release; finalise the published lazy.nvim spec snippet
+
+#### 6a plan --- `:checkhealth hol4nvim`
+
+A `health.lua` with `M.check()`, registered by Neovim's convention
+(`require("hol4nvim.health").check()` runs on `:checkhealth hol4nvim`; no
+wiring needed beyond the file existing on the rtp). Uses the `vim.health`
+API (`start`/`ok`/`warn`/`error`/`info`). It re-runs the same resolvers the
+plugin uses at runtime --- no duplicated logic --- and, crucially, whenever
+a step fails it names the exact `setup()` option to set (the 7d/7b promise:
+"naming the exact missing `setup()` option whenever a discovery step
+fails"). Sections:
+
+-   **hol binary** --- `repl.which_hol()`. `ok` with the resolved path and
+    how it was found (config.hol_cmd / config.holdir / lastmaker / $HOLDIR /
+    $PATH), or `error` naming `hol_cmd`/`holdir`.
+-   **holdir** --- `repl.holdir()`. Report the root and its derivation;
+    `warn` (not error) when only `$HOLDIR` supplied it, since that is the
+    fallback Phase 7 tries to retire.
+-   **holdeptool** (`hl`) --- probe `holdeptool.exe` next to the hol binary
+    then under `holdir()/bin`; `warn` if absent (only `hl` needs it).
+-   **vimhol.sml** (`hx` bootstrap) --- `repl.vimhol_sml()`; `ok`/`warn`
+    with the resolved path, `info` when `vimhol = false` (auto-bootstrap
+    disabled by choice).
+-   **fifo transport** --- `fifo.path()`; report the resolved path, whether
+    it exists as a fifo, whether the dir is writable, and whether a reader
+    is currently attached (mirrors the `hs` no-reader check). `info` the
+    active `transport` setting.
+-   **tree-sitter tier** --- for `holscript`/`holterm`/`sml`, whether
+    `parser/<lang>.so` loads; `ok` (TS tier active) or `warn` (regex
+    fallback --- tell them to run `make parsers` / add `build = "make
+    parsers"`). Also flag ABI/Neovim-version mismatch if `language.add`
+    fails for a built parser.
+-   **keymap prefix vs leader** --- the bug that actually cost a user 800ms
+    on `hs`/`he`. When `config.prefix` equals `mapleader`/`maplocalleader`,
+    scan existing global maps (`nvim_get_keymap`) for entries that start
+    with `prefix` and are longer than `prefix .. <suffix>`; any such
+    overlap makes Neovim wait `timeoutlen` on every hol map. `warn` listing
+    the colliding lhs's and the two fixes (raise `timeoutlen`, or change
+    `prefix` off the leader). This is the one health check that encodes
+    hard-won project knowledge rather than restating discovery. See
+    [[user-nvim-config]].
+
+Tested HOL-free in `tests/unit.lua`: drive `health.check()` with a stub
+`vim.health` collecting `{level, msg}` tuples, assert the collision warning
+fires for `prefix=" "` with a planted overlapping global map and stays
+silent otherwise, and that a missing-hol config produces an `error` naming
+`hol_cmd`/`holdir`. Also fold in here the 7d deferral: the standalone
+"config pre-loads Vimhol" smoke script (bootstrap no-ops, sentinel still
+prints, one pipe-routed eval) graduates into the e2e tier now that a second
+hol boot is acceptable at release time.
+
+#### 6b plan --- `:help hol4nvim`
+
+`doc/hol4nvim.txt` in vimdoc format (`*hol4nvim.txt*` header, `*tag*`
+anchors, `>`/`<` code blocks, a modeline `vim:tw=78:ts=8:ft=help:norl:`),
+plus a `doc/tags` generated by `:helptags doc/` (committed so `:help`
+works without the user regenerating). Content is the README reorganised for
+in-editor lookup, not new prose: install/spec, the full config table with
+defaults, the keymap table (`*hol4nvim-mappings*`), the command list, the
+two syntax tiers, and a troubleshooting section that points at
+`:checkhealth hol4nvim`. Keep it in sync with README by treating README as
+source and the helpdoc as its vimdoc rendering; a `make` target or a note
+in CLAUDE.md guards against drift.
+
+#### 6c plan --- release
+
+-   Reconcile the three copies of the lazy spec (README install block,
+    `examples/user-init.lua`, the user's own `~/.config/nvim/...`) so the
+    published one carries `build = "make parsers"` and the documented
+    defaults.
+-   `CHANGELOG.md` covering Phases 0--7 as the initial release notes.
+-   Tag (annotated, signed) once `make test` is green and the tree is
+    committed; the published spec pins the tag.
 
 ### Phase 7 --- Out-of-the-box setup (standalone goal)
 
@@ -280,13 +411,13 @@ audit of those requirements and their hol4nvim disposition:
 
 | Upstream asks you to hand-wire | hol4nvim | Status |
 |---|---|---|
-| `~/.hol-config.sml` that `use`s `vimhol.sml` (enables the fifo protocol: pipe transport, `\c` interrupt, robust multi-line sends) | 7a auto-bootstrap at `\x` | ✅ |
-| `$HOLDIR` environment variable (holdeptool for `\l`, default fifo path, vimhol.sml location) | 7b `holdir()` resolver + `holdir` option | ✅ |
+| `~/.hol-config.sml` that `use`s `vimhol.sml` (enables the fifo protocol: pipe transport, `hc` interrupt, robust multi-line sends) | 7a auto-bootstrap at `hx` | ✅ |
+| `$HOLDIR` environment variable (holdeptool for `hl`, default fifo path, vimhol.sml location) | 7b `holdir()` resolver + `holdir` option | ✅ |
 | `hol` on `$PATH` | `hol_cmd` / lastmaker / `$HOLDIR` discovery chain | ✅ (Phase 0) |
 | copy `filetype.vim` into `~/.vim` | `ftdetect/` ships in-plugin; compatible with `ft = "hol4script"` lazy-loading (lazy.nvim sources plugin ftdetect eagerly, so `*Script.sml` detection precedes the plugin's own load — verified headless: no load at startup or for plain `.sml`, full attach on first `*Script.sml`) | ✅ (Phase 0, lazy-load verified with the published spec) |
 | copy `hol4script.vim` into `~/.vim/syntax` | `syntax/` ships in-plugin | ✅ (5a) |
 | source `holabs.vim` by hand | `abbreviations = true` | ✅ (Phase 4) |
-| `vimhol.sh` (tmux + rlwrap + per-pair fifo plumbing) | subsumed by `\x`: in-vim `:terminal` + per-session pipe | ✅ |
+| `vimhol.sh` (tmux + rlwrap + per-pair fifo plumbing) | subsumed by `hx`: in-vim `:terminal` + per-session pipe | ✅ |
 | `$VIMHOL_FIFO` env shared with an external session | `config.fifo` + the 7c no-reader recipe | ✅ |
 
 End state: a fresh user adds the lazy spec, sets `holdir` only if their HOL
@@ -294,14 +425,14 @@ is not discoverable, and everything works --- no dotfiles, no exported
 environment variables, nothing copied by hand.
 
 -   [x] **7a --- auto-bootstrap Vimhol into spawned REPLs.** Right after
-    `\x` spawns the terminal job, feed the pty (each line a complete
+    `hx` spawns the terminal job, feed the pty (each line a complete
     statement --- this cannot go through `send()`: the pipe it enables is
     not up yet):
 
         val _ = case #lookupStruct PolyML.globalNameSpace "Vimhol" of
                   NONE => use "<holdir>/tools/editor-modes/vim/vimhol.sml"
                 | SOME _ => ();
-        val _ = print "hol4nvim: vimhol ready\n";
+        val _ = print "hol4nvim: vimhol readyhn";
 
     wrapped in quietdec toggles to keep the banner clean. No timing games
     needed: hol evaluates stdin only after `check-intconfig.sml` has run
@@ -316,7 +447,7 @@ environment variables, nothing copied by hand.
     is location-independent for us: its baked-in fifo path is only the
     `$VIMHOL_FIFO`-unset fallback, and `repl.open` always exports a
     per-session `VIMHOL_FIFO`. If the file cannot be found, warn once and
-    continue --- the session still works, with multi-line sends and `\c`
+    continue --- the session still works, with multi-line sends and `hc`
     degrading to the raw pty exactly as they do today without the dotfile.
 -   [x] **7b --- single `holdir()` resolver.** Order: `config.holdir` →
     derived from the resolved hol binary (`.../bin/hol`, resolved through
@@ -348,7 +479,7 @@ environment variables, nothing copied by hand.
     loads vimhol --- exactly the dependence Phase 7 abolishes. The e2e REPL
     now boots with `HOL_NOCONFIG=1` and waits on the `hol4nvim: vimhol
     ready` sentinel (replacing the "Use-ing configuration" needle), so
-    every pipe-routed multi-line send, `\c` interrupt, and `\l` in the
+    every pipe-routed multi-line send, `hc` interrupt, and `hl` in the
     suite runs on the plugin's own bootstrap with zero dotfiles. The
     guard's other branch --- a config that pre-loads Vimhol: bootstrap
     no-ops, the sentinel still prints, and a pipe-routed probe evaluates
@@ -368,13 +499,79 @@ environment variables, nothing copied by hand.
 
 Phase 7 complete ✅
 
+### Phase 8 --- Theorem search
+
+-   [x] **Search panel** (`lua/hol4nvim/search.lua`): query the live
+    session's theorem database from an interactive panel, rather than
+    scrolling the REPL. `hf`/`hm` (or `:HolFind`/`:HolMatch`) open a
+    horizontal split of the focused window whose first line names the search
+    type, second line is an editable query bar, and the rest the results;
+    `<CR>` on the bar runs the query (editing it and pressing `<CR>` again
+    re-runs), `<CR>` on a result line inserts that theorem's name at the cursor
+    in the window the panel was opened from (and yanks it), `q` closes. `hf`
+    searches names (`DB.find`); `hm` searches by term pattern (`DB.apropos`,
+    parsing with `Parse.Term`), and in visual mode seeds the bar with the
+    selection. The bar starts pre-filled with `<cword>`.
+
+    Key design point: the plugin's transport is one-way (send only; see the
+    Architecture note), so there is no channel to read HOL's answers back.
+    Instead the query is pure SML that FORMATS the hits (`Parse.thm_to_string`)
+    and writes them to a temp file ending in a `===HOLSEARCH_DONE===`
+    sentinel; Neovim polls the file and renders it. Formatting the string
+    ourselves sidesteps the `print_depth 0` echo suppression on piped
+    sessions. The whole query is wrapped in a handler that ALWAYS writes the
+    sentinel, so a term pattern that fails to parse reports the error instead
+    of hanging the poll. Results are `holterm`-highlighted (the unicode
+    `⊢ ∀ ∧ ⇒` become real operators/binders), reusing the 5c grammar.
+
+    The SML builder is pure `(query, outfile) -> string`, unit-tested like
+    `transform.lua`; a live name search (`DB.find "ASSOC"` -> `ADD_ASSOC`)
+    is asserted in the e2e tier. Gotcha recorded: internal SML bindings must
+    be letter-first (`hnv_*`), since a leading `_` is the wildcard, not an
+    identifier. Deferred: `DB.match`/theory-scoped search, result-line jumps
+    to source, a float layout.
+
+Phase 8 complete ✅
+
+### Phase 9 --- Insert-mode completion
+
+-   [x] **Completion source** (`lua/hol4nvim/completion.lua` +
+    `lua/hol4nvim/cmp.lua`): insert-mode completion in `hol4script` buffers,
+    exposed as an nvim-cmp source. Two vocabularies feed it: a curated static
+    list of HOL tactics/tacticals (`M.TACTICS`, offline, no REPL), and theorem
+    names snapshotted from the live session's `DB.listDB()` (public only,
+    filtered on `thminfo.private`). `completion.register()` registers the
+    `hol4nvim` source and, with `auto_setup`, prepends it to the `hol4script`
+    filetype's cmp sources (merged with the user's own), so with nvim-cmp
+    installed it works out of the box. Accepting a theorem inserts the bare
+    name, matching the search panel's pick.
+
+    Same one-way-transport constraint as search: theorem names can't be
+    queried per keystroke, so `M.refresh()` sends a single-line enumeration
+    SML that writes `name<TAB>theory` lines to a temp file ending in a
+    `===HOLCOMPLETE_DONE===` sentinel, polled *asynchronously* (a libuv timer,
+    not `vim.wait`, so a background refresh never blocks the UI). The command
+    is one line so it goes straight to the pty and never needs the Vimhol pipe
+    (which may not be attached yet just after a REPL starts). Refreshes are
+    driven by `User` autocmds `repl` fires --- `HolReplStarted` after the
+    bootstrap, `HolLoaded` after `hl` --- so `repl` needs no dependency on
+    `completion`; plus a lazy refresh on first completion and
+    `:HolCompletionRefresh`. `completion.enabled` (flipped by
+    `:HolCompletionToggle`) gates the source's `is_available`, so it toggles
+    without touching the user's cmp config.
+
+    The enumeration builder and parser are pure and unit-tested; a live
+    refresh finding `ADD_ASSOC` is asserted in the e2e tier. `:checkhealth`
+    reports nvim-cmp presence and the cache size. Deferred: constant-name
+    completion (`Theory.constants`), context-awareness (tactics only inside
+    `Proof..QED`, theorems only inside `rw[..]`) via the tree-sitter tier, a
+    native blink.cmp source (blink can consume this one via `blink.compat`).
+
+Phase 9 complete ✅
+
 ## Keep in view (not primary)
 
--   [ ] Search window: a toggleable split/float querying the live session
-    over loaded theories --- pattern search (`DB.apropos` /
-    `Hol_pp.print_apropos` on a term) and name search (`DB.find` /
-    `Hol_pp.print_find`), with results rendered in the window rather than
-    scrolling the REPL.
+-   (nothing outstanding)
 
 ## Upstream mapping reference (`<LocalLeader>` = `h` by default)
 

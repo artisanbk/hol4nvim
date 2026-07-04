@@ -11,6 +11,10 @@ See [ROADMAP.md](ROADMAP.md) for parity status with the upstream vim config.
 {
   "artisanbk/hol4nvim",
   ft = "hol4script", -- lazy-load on HOL4 script files; see "Filetype detection"
+  build = "make parsers", -- compile the tree-sitter syntax tier (needs cc;
+                          -- optional: without it the regex tier loads instead)
+  dependencies = { "hrsh7th/nvim-cmp" }, -- optional: powers insert-mode
+                                         -- completion (see "Completion")
   config = function()
     require("hol4nvim").setup({
       -- defaults shown; all optional
@@ -27,11 +31,17 @@ See [ROADMAP.md](ROADMAP.md) for parity status with the upstream vim config.
       fifo = nil,             -- fifo path; else $VIMHOL_FIFO, else
                               -- <holdir>/tools/editor-modes/vim/fifo
       vimhol = true,          -- auto-load vimhol.sml into REPLs started by
-                              -- \x (skipped if your hol-config already does;
+                              -- hx (skipped if your hol-config already does;
                               -- false disables, or give an explicit path)
       keymaps = true,         -- false disables all buffer-local keymaps
       prefix = "<localleader>", -- keymap prefix
       abbreviations = false,  -- holabs ASCII->unicode insert abbreviations
+      completion = {          -- insert-mode completion (needs nvim-cmp)
+        enabled = true,       -- master switch (:HolCompletionToggle at runtime)
+        auto_setup = true,    -- register + add the source to hol4script's cmp
+        tactics = true,       -- offer the static HOL tactic vocabulary
+        theorems = true,      -- offer live theorem names from the session DB
+      },
     })
   end,
 }
@@ -68,63 +78,160 @@ is attached, the warning names the fifo and the exact recipe to start one
 (`VIMHOL_FIFO='<path>' hol` plus a guarded `use` of vimhol.sml to paste into
 it) — and creates the fifo, so the pasted command finds a working pipe.
 
-REPLs started by `\x` get Vimhol loaded automatically — no `~/.hol-config.sml`
+REPLs started by `hx` get Vimhol loaded automatically — no `~/.hol-config.sml`
 needed. The bootstrap is a guarded `use`: if your hol-config (or `$HOL_CONFIG`)
 already loads Vimhol it does nothing, and it announces itself with a
 `hol4nvim: vimhol ready` line once the session can take fifo-routed sends.
 
 ## Keymaps
 
-Buffer-local on `hol4script` buffers (`*Script.sml`). `<localleader>` defaults
-to `\`. Send-style maps work on the current line (normal mode) or the
-selection (visual mode); SML `(* ... *)` comments are stripped from the text
-before sending, and comment-only selections are not sent.
+Buffer-local on `hol4script` buffers (`*Script.sml`). The prefix is
+`<localleader>`; following HOL's convention these examples set it to `h`
+(`vim.g.maplocalleader = "h"`), so the maps read `hx`, `hs`, `he`, …. Send-style
+maps work on the current line (normal mode) or the selection (visual mode); SML
+`(* ... *)` comments are stripped from the text before sending, and comment-only
+selections are not sent.
 
 | Map | Action |
 |-----|--------|
-| `\x` | Start a HOL REPL in a split |
-| `\X` | Close the current REPL (sends Ctrl-D) |
-| `\s` (`\w` alias) | Send raw SML |
-| `\u` | Send quietly (wrapped in `quietdec` toggles — no result printout) |
-| `\!` | Send the whole document; `open` declarations are dropped (use `\l` for those) |
-| `\e` | Apply as a tactic to the current goal (`proofManagerLib.expand`) |
-| `\g` | Set as the goal — include the backquotes (`proofManagerLib.g`) |
-| `\G` | Set an unquoted goal from Theorem-statement + `Proof` lines; handles `Proof[attrs]` and `Resume thm[label]:` headers |
-| `\S` | Prove as a subgoal; a trailing `` by ...`` is stripped (`bossLib.sg`) |
-| `\F` | Suffices-to-show; a trailing `suffices_by ...` is stripped (`bossLib.qsuff_tac`) |
-| `\P` | Apply to pattern-selected subgoals (`Q.SELECT_GOAL_LT`) |
-| `\l` | Run holdeptool over the text, `load` each dependency, execute the text quietly, print `HOLLoad ... completed` |
-| `\b` / `\B` | Back up a proof step / restore save point (a count repeats: `3\b`) |
-| `\v` / `\d` | Save proof state / drop current goal (count repeats `\d`) |
-| `\p` / `\r` | Print current proof state / restart the goal |
-| `\R` | Rotate subgoals (count = how far) |
-| `\c` | Interrupt the running tactic (via the Vimhol fifo, else Ctrl-C) |
-| `\t` / `\T` | Select the enclosing `` `term` `` / ``` ``term`` ``` |
-| `\a` | Select the theorem statement + `Proof` lines (feed it to `\G`) |
-| `\y` / `\n` | Toggle `show_types` / unicode pretty-printing |
-| `\h` | Pass-through `h` (so `hh` moves left when `<localleader>` is `h`) |
+| `hx` | Start a HOL REPL in a split |
+| `hX` | Close the current REPL (sends Ctrl-D) |
+| `hs` (`hw` alias) | Send raw SML |
+| `hu` | Send quietly (wrapped in `quietdec` toggles — no result printout) |
+| `h!` | Send the whole document; `open` declarations and new-style `Theory`/`Ancestors`/`Libs` headers are dropped (use `hl` for those) |
+| `he` | Apply as a tactic to the current goal (`proofManagerLib.expand`) |
+| `hg` | Set as the goal — include the backquotes (`proofManagerLib.g`) |
+| `hG` | Set an unquoted goal from Theorem-statement + `Proof` lines; handles `Proof[attrs]` and `Resume thm[label]:` headers |
+| `hS` | Prove as a subgoal; a trailing `` by ...`` is stripped (`bossLib.sg`) |
+| `hF` | Suffices-to-show; a trailing `suffices_by ...` is stripped (`bossLib.qsuff_tac`) |
+| `hP` | Apply to pattern-selected subgoals (`Q.SELECT_GOAL_LT`) |
+| `hl` | Run holdeptool over the text, `load` each dependency, execute the text quietly, print `HOLLoad ... completed` |
+| `hb` / `hB` | Back up a proof step / restore save point (a count repeats: `3hb`) |
+| `hv` / `hd` | Save proof state / drop current goal (count repeats `hd`) |
+| `hp` / `hr` | Print current proof state / restart the goal |
+| `hR` | Rotate subgoals (count = how far) |
+| `hc` | Interrupt the running tactic (via the Vimhol fifo, else Ctrl-C) |
+| `ht` / `hT` | Select the enclosing `` `term` `` / ``` ``term`` ``` |
+| `ha` | Select the theorem statement + `Proof` lines (feed it to `hG`) |
+| `hf` | Open a search panel: theorems by name (`DB.find`) — see Search |
+| `hm` | Open a search panel: theorems by term (`DB.apropos`); visual mode seeds the selection |
+| `hy` / `hn` | Toggle `show_types` / unicode pretty-printing |
+| `hh` | Pass-through `h` (so `hh` moves left when `<localleader>` is `h`) |
 
 Commands: `:HolStart`, `:HolStop`, `:HolSend` (range-aware), `:HolSendDocument`,
-`:HolUnabbrev` (unicode → ASCII, whole buffer or range).
+`:HolUnabbrev` (unicode → ASCII, whole buffer or range), `:HolFind [name]`,
+`:HolMatch [term]`.
+
+Full docs live in `:help hol4nvim`. If anything misbehaves, run
+`:checkhealth hol4nvim`: it reports the resolved hol binary, HOL root,
+holdeptool, vimhol.sml, fifo, and tree-sitter parsers — naming the exact
+`setup()` option to set on any failure — and flags a keymap `prefix` that
+collides with your leader (a common source of input lag; see below).
 
 With `abbreviations = true`, insert mode gets the
 [holabs](https://github.com/HOL-Theorem-Prover/HOL/blob/master/tools/editor-modes/vim/holabs.vim)
 ASCII→unicode abbreviations: type `/\` `\/` `==>` `<=>` `!` `?` `IN` `SUBSET` ...
 followed by a space to get `∧ ∨ ⇒ ⇔ ∀ ∃ ∈ ⊆`.
 
+## Search
+
+`hf` / `:HolFind` and `hm` / `:HolMatch` open a search **panel** — a horizontal
+split of the current window whose top line names the search type, with an
+editable query bar below it. Type a query and press `<CR>` to run it; the
+results fill the panel, and editing the bar and pressing `<CR>` again re-runs.
+Press `<CR>` on a result line to insert that theorem's name at the cursor in
+the window you searched from (it's yanked to the unnamed register too). `q`
+closes the panel. `hf` searches theorem names (`DB.find`); `hm` searches by
+term pattern (`DB.apropos`), and in visual mode seeds the bar with the
+selection. The bar starts pre-filled with the word under the cursor.
+`:HolFind name` / `:HolMatch term` run a search straight away.
+
+The plugin's transport is one-way — it can send to HOL but not read answers
+back — so a search is SML that writes its formatted results to a temp file,
+which Neovim polls and renders, pretty-printed and highlighted with the
+`holterm` grammar. A search needs a running session (start one with `hx`); a
+bad term pattern reports the error instead of hanging.
+
+## Completion
+
+Insert-mode completion in `hol4script` buffers, exposed as an
+[nvim-cmp](https://github.com/hrsh7th/nvim-cmp) source. Two vocabularies:
+
+- **HOL tactics/tacticals** — a curated static list (`rw`, `simp`, the `drule`
+  family, `qexists_tac`, `Induct_on`, the tacticals, …). No REPL needed.
+- **Theorem names** — snapshotted from the running session's `DB.listDB()`
+  (public theorems only), so completion tracks whatever theories are loaded.
+
+The source is registered and, with `auto_setup = true`, added to the
+`hol4script` filetype's cmp sources automatically — with nvim-cmp installed it
+just works; the popup appears as you type. Accepting a theorem completion
+inserts the bare name (e.g. `ADD_ASSOC`), matching how the search panel picks a
+result. `:HolCompletionToggle` turns it off/on without touching your cmp config.
+
+Because the transport is one-way, theorem names can't be queried per keystroke:
+the cache is snapshotted and refreshed when a REPL starts, after `hl` loads new
+dependencies, and on demand with `:HolCompletionRefresh` (an enumeration SML
+writes the names to a temp file the plugin polls — the same round-trip Search
+uses). Until the first refresh completes, only the tactic vocabulary shows.
+
+Set `completion.enabled = false` (or omit nvim-cmp) to skip it entirely;
+`completion.tactics` / `completion.theorems` toggle the two vocabularies.
+`:checkhealth hol4nvim` reports whether nvim-cmp is present and how many
+theorem names are cached.
+
 ## Syntax highlighting
 
-`syntax/hol4script.vim` — a verbatim port of upstream's regex highlighting —
-loads automatically for `*Script.sml`. A tree-sitter tier is roadmapped
-(ROADMAP Phase 5b/5c: a self-contained `holscript` grammar built by a lazy
-`build` hook, no nvim-treesitter dependency); once its parser is built it
-takes precedence per buffer and the regex file remains the zero-requirements
-fallback.
+Two tiers, chosen automatically per buffer:
+
+- **tree-sitter (preferred)** — self-contained grammars ship in-repo
+  (`grammar/*/`; each generated `parser.c` is vendored, so building needs
+  only a C compiler). The spec's `build = "make parsers"` hook compiles them
+  into `parser/*.so`, and the ftplugin uses them whenever they exist. No
+  nvim-treesitter needed: Neovim core reads `parser/` and `queries/` straight
+  off the plugin's runtimepath.
+- **regex (fallback)** — `syntax/hol4script.vim`, a verbatim port of
+  upstream's highlighting. Zero requirements; loads whenever the parser is
+  not built.
+
+The tree-sitter tier parses the script-level structure —
+`Theorem/Triviality..Proof..QED`, `Definition/Termination/End`, `Datatype`,
+`(Co)Inductive`, `Type`/`Overload`, new-style `Theory`/`Ancestors`/`Libs`
+headers, quotations, `«»`/`""` strings, nested `(* *)` comments — and fixes
+the regex tier's structural limitations:
+
+- indented blocks highlight (regex demands column 0);
+- mismatched quotation delimiters (`` `x + y’ ``) show as errors instead of
+  well-formed quotations;
+- edits reparse incrementally instead of `syn sync fromstart` whole-file
+  rescans;
+- folding covers `Definition`/`Datatype`/`Inductive..End` blocks as well as
+  `Proof..QED` (folds are opt-in:
+  `setlocal foldmethod=expr foldexpr=v:lua.vim.treesitter.foldexpr()`).
+
+Block interiors are no longer flat: each is handed to a real grammar by
+injection, so terms and ML highlight token-by-token (the regex tier could
+only recognise a hand-curated symbol vocabulary):
+
+- **plain ML between blocks and tactic bodies** inject the vendored
+  [tree-sitter-sml](https://github.com/MatthewFluet/tree-sitter-sml)
+  (`grammar/sml/`, MIT, also built by `make parsers`) — real SML keywords,
+  constructors, literals;
+- **unquoted term text** (`Definition`/`Datatype`/`Inductive` bodies) and
+  **quotation interiors** (`` `..` ``, `` ``..`` ``, `‘..’`, `“..”`) inject
+  `holterm` (`grammar/holterm/`), a small lenient grammar for the HOL term
+  language — binders (`!` `?` `\` `∀` `∃` `λ`), operators, `if/then/else`,
+  `T`/`F`, numbers, strings, type variables (`'a`), and `^` antiquotation.
+  quotation delimiters are trimmed so only the term text is reparsed.
+
+Each injection is best-effort: if a grammar's parser is not built, that span
+simply stays opaque. `holterm` is deliberately a tokeniser, not a full parser
+— HOL's concrete term syntax is user-extensible, so no fixed grammar could
+parse arbitrary terms, and highlighting does not need to.
 
 ### Known limitations of the regex tier
 
-All inherited from upstream — vim renders these identically. They are what
-the tree-sitter tier is designed to fix.
+Apply only when the parser is not built. All inherited from upstream — vim
+renders these identically.
 
 - **Block keywords only count at column 0.** An indented theorem gets no
   block treatment at all:
@@ -173,5 +280,5 @@ make test-unit                             # the HOL-free tier only
 
 `examples/TestScript.sml` is a guided tour of every implemented map — it is
 made of bare fragments on purpose, so it cannot be batch-sent.
-`examples/WholeScript.sml` is a linear script demonstrating `\!`
+`examples/WholeScript.sml` is a linear script demonstrating `h!`
 (send whole document).
