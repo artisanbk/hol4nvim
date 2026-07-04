@@ -7,11 +7,15 @@ CC ?= cc
 GRAMMARS := $(notdir $(wildcard grammar/*))
 PARSERS := $(addprefix parser/,$(addsuffix .so,$(GRAMMARS)))
 
-.PHONY: test test-unit test-ts test-e2e parsers grammar test-grammar clean
+.PHONY: test test-ci test-unit test-ts test-e2e parsers grammar test-grammar clean
 
 # Full suite. test-e2e needs a working HOL4 (hol on PATH or $$HOLDIR set);
 # test-unit runs anywhere; test-ts builds the tree-sitter parsers (needs cc).
 test: test-unit test-ts test-e2e
+
+# What CI runs: the HOL-free tiers (no HOL4 install needed). Mirrors the
+# GitHub Actions workflow so `make test-ci` reproduces it locally.
+test-ci: test-unit test-ts
 
 test-unit:
 	$(NVIM) --headless -u init.lua -l tests/unit.lua

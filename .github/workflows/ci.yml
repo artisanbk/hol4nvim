@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# Cancel an in-progress run when the same ref is pushed again.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (nvim ${{ matrix.neovim }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # v0.10.0 is the documented minimum (see README/doc); stable and
+        # nightly catch regressions and upcoming breakage. Drop an entry if a
+        # given line is ever flaky.
+        neovim: [v0.10.0, stable, nightly]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Neovim ${{ matrix.neovim }}
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim }}
+
+      - name: Versions
+        run: |
+          nvim --version | head -3
+          cc --version | head -1
+
+      # HOL-free tiers only: unit (no dependencies) + tree-sitter (compiles the
+      # vendored parser C with cc; no tree-sitter CLI required). The e2e tier
+      # needs a full HOL4 build and is intentionally not run in CI.
+      - name: Run tests
+        run: make test-ci
