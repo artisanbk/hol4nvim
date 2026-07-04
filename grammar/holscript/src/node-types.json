@@ -1,0 +1,465 @@
+[
+  {
+    "type": "datatype",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "term",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "definition",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "attributes",
+          "named": true
+        },
+        {
+          "type": "tactics",
+          "named": true
+        },
+        {
+          "type": "term",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "header_section",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "section_names",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "inductive",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "term",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "source_file",
+    "named": true,
+    "root": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "datatype",
+          "named": true
+        },
+        {
+          "type": "definition",
+          "named": true
+        },
+        {
+          "type": "hol_string",
+          "named": true
+        },
+        {
+          "type": "inductive",
+          "named": true
+        },
+        {
+          "type": "ml_chunk",
+          "named": true
+        },
+        {
+          "type": "quotation_double",
+          "named": true
+        },
+        {
+          "type": "quotation_mismatched",
+          "named": true
+        },
+        {
+          "type": "quotation_single",
+          "named": true
+        },
+        {
+          "type": "quotation_unicode",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "theorem",
+          "named": true
+        },
+        {
+          "type": "theory_header",
+          "named": true
+        },
+        {
+          "type": "type_abbrev",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "tactics",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "hol_string",
+          "named": true
+        },
+        {
+          "type": "quotation_double",
+          "named": true
+        },
+        {
+          "type": "quotation_mismatched",
+          "named": true
+        },
+        {
+          "type": "quotation_single",
+          "named": true
+        },
+        {
+          "type": "quotation_unicode",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "tactic_chunk",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "term",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "hol_string",
+          "named": true
+        },
+        {
+          "type": "quotation_double",
+          "named": true
+        },
+        {
+          "type": "quotation_mismatched",
+          "named": true
+        },
+        {
+          "type": "quotation_single",
+          "named": true
+        },
+        {
+          "type": "quotation_unicode",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "term_chunk",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "theorem",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "attributes",
+          "named": true
+        },
+        {
+          "type": "tactics",
+          "named": true
+        },
+        {
+          "type": "term",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "theory_header",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "attributes",
+          "named": true
+        },
+        {
+          "type": "header_section",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "type_abbrev",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "attributes",
+          "named": true
+        },
+        {
+          "type": "quotation_double",
+          "named": true
+        },
+        {
+          "type": "quotation_mismatched",
+          "named": true
+        },
+        {
+          "type": "quotation_single",
+          "named": true
+        },
+        {
+          "type": "quotation_unicode",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": ":",
+    "named": false
+  },
+  {
+    "type": "=",
+    "named": false
+  },
+  {
+    "type": "Ancestors",
+    "named": false
+  },
+  {
+    "type": "CoInductive",
+    "named": false
+  },
+  {
+    "type": "Datatype",
+    "named": false
+  },
+  {
+    "type": "Definition",
+    "named": false
+  },
+  {
+    "type": "End",
+    "named": false
+  },
+  {
+    "type": "Inductive",
+    "named": false
+  },
+  {
+    "type": "Libs",
+    "named": false
+  },
+  {
+    "type": "Overload",
+    "named": false
+  },
+  {
+    "type": "Proof",
+    "named": false
+  },
+  {
+    "type": "QED",
+    "named": false
+  },
+  {
+    "type": "Termination",
+    "named": false
+  },
+  {
+    "type": "Theorem",
+    "named": false
+  },
+  {
+    "type": "Theory",
+    "named": false
+  },
+  {
+    "type": "Triviality",
+    "named": false
+  },
+  {
+    "type": "Type",
+    "named": false
+  },
+  {
+    "type": "attributes",
+    "named": true
+  },
+  {
+    "type": "comment",
+    "named": true,
+    "extra": true
+  },
+  {
+    "type": "hol_string",
+    "named": true
+  },
+  {
+    "type": "identifier",
+    "named": true
+  },
+  {
+    "type": "ml_chunk",
+    "named": true
+  },
+  {
+    "type": "quotation_double",
+    "named": true
+  },
+  {
+    "type": "quotation_mismatched",
+    "named": true
+  },
+  {
+    "type": "quotation_single",
+    "named": true
+  },
+  {
+    "type": "quotation_unicode",
+    "named": true
+  },
+  {
+    "type": "section_names",
+    "named": true
+  },
+  {
+    "type": "string",
+    "named": true
+  },
+  {
+    "type": "tactic_chunk",
+    "named": true
+  },
+  {
+    "type": "term_chunk",
+    "named": true
+  }
+]

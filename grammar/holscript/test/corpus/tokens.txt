@@ -1,0 +1,178 @@
+==================
+quotations in ML
+==================
+
+val g = `x + y`;
+val tm = ``a /\ b``;
+val u = ‘p \/ q’;
+val v = “r ==> s”;
+
+---
+
+(source_file
+  (ml_chunk)
+  (quotation_single)
+  (ml_chunk)
+  (quotation_double)
+  (ml_chunk)
+  (quotation_unicode)
+  (ml_chunk)
+  (quotation_unicode)
+  (ml_chunk))
+
+==================
+mismatched quotation delimiters are their own node
+==================
+
+val bad = `x + y’;
+
+---
+
+(source_file
+  (ml_chunk)
+  (quotation_mismatched)
+  (ml_chunk))
+
+==================
+nested comments
+==================
+
+(* outer (* inner (* deepest *) *) still outer *)
+val x = 1;
+
+---
+
+(source_file
+  (comment)
+  (ml_chunk))
+
+==================
+comment between blocks and inside a proof
+==================
+
+(* header comment with Theorem foo: inside *)
+Theorem real:
+  T
+Proof
+  (* proof comment *)
+  simp []
+QED
+
+---
+
+(source_file
+  (comment)
+  (theorem
+    name: (identifier)
+    (term
+      (term_chunk))
+    (comment)
+    (tactics
+      (tactic_chunk))))
+
+==================
+strings do not open comments or quotations
+==================
+
+val s = "a (* not a comment *) b";
+val t = "backtick ` inside";
+val u = «guillemet string»;
+
+---
+
+(source_file
+  (ml_chunk)
+  (string)
+  (ml_chunk)
+  (string)
+  (ml_chunk)
+  (hol_string)
+  (ml_chunk))
+
+==================
+quotation inside tactics
+==================
+
+Theorem uses_quote:
+  T
+Proof
+  qexists_tac `x + 1` >> simp []
+QED
+
+---
+
+(source_file
+  (theorem
+    name: (identifier)
+    (term
+      (term_chunk))
+    (tactics
+      (tactic_chunk)
+      (quotation_single)
+      (tactic_chunk))))
+
+==================
+theory header with ancestors and libs
+==================
+
+Theory thunk_betaProof
+Ancestors
+  string option sum pair list alist
+  finite_map pred_set
+Libs
+  term_tactic monadsyntax
+
+val code = 1;
+
+---
+
+(source_file
+  (theory_header
+    name: (identifier)
+    (header_section
+      (section_names))
+    (header_section
+      (section_names)))
+  (ml_chunk))
+
+==================
+theory header names on the keyword line
+==================
+
+Theory small
+Ancestors list
+Libs term_tactic
+
+Theorem t:
+  T
+Proof
+  simp []
+QED
+
+---
+
+(source_file
+  (theory_header
+    name: (identifier)
+    (header_section
+      (section_names))
+    (header_section
+      (section_names)))
+  (theorem
+    name: (identifier)
+    (term
+      (term_chunk))
+    (tactics
+      (tactic_chunk))))
+
+==================
+mid-line keyword words are plain ML
+==================
+
+val Theorem = 1;
+val x = End + QED;
+
+---
+
+(source_file
+  (ml_chunk))

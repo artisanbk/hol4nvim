@@ -1,0 +1,188 @@
+==================
+forall with body
+==================
+
+!x y. x + y = y + x
+
+---
+
+(source_file
+  (binder)
+  (identifier)
+  (identifier)
+  (operator)
+  (identifier)
+  (operator)
+  (identifier)
+  (operator)
+  (identifier)
+  (operator)
+  (identifier))
+
+==================
+lambda is a binder, disjunction is an operator
+==================
+
+\x. p \/ q
+
+---
+
+(source_file
+  (binder)
+  (identifier)
+  (operator)
+  (identifier)
+  (operator)
+  (identifier))
+
+==================
+exists-unique and implication
+==================
+
+?!n. n > 0 ==> P n
+
+---
+
+(source_file
+  (binder)
+  (identifier)
+  (operator)
+  (identifier)
+  (operator)
+  (number)
+  (operator)
+  (identifier)
+  (identifier))
+
+==================
+booleans and conjunction
+==================
+
+T /\ F
+
+---
+
+(source_file
+  (boolean)
+  (operator)
+  (boolean))
+
+==================
+if then else keywords
+==================
+
+if b then x else y
+
+---
+
+(source_file
+  (keyword)
+  (identifier)
+  (keyword)
+  (identifier)
+  (keyword)
+  (identifier))
+
+==================
+type variables and annotation
+==================
+
+(l : 'a list)
+
+---
+
+(source_file
+  (punctuation)
+  (identifier)
+  (operator)
+  (type_var)
+  (identifier)
+  (punctuation))
+
+==================
+numbers: decimal and hex
+==================
+
+0xFF + 42 + 3.5
+
+---
+
+(source_file
+  (number)
+  (operator)
+  (number)
+  (operator)
+  (number))
+
+==================
+string and char literals
+==================
+
+s = "hi" /\ c = #"a"
+
+---
+
+(source_file
+  (identifier)
+  (operator)
+  (string)
+  (operator)
+  (identifier)
+  (operator)
+  (char))
+
+==================
+antiquotation splice
+==================
+
+f ^tm x
+
+---
+
+(source_file
+  (identifier)
+  (antiquotation)
+  (identifier))
+
+==================
+Table is an identifier, not boolean T + able
+==================
+
+Table
+
+---
+
+(source_file
+  (identifier))
+
+==================
+nested comment is skipped
+==================
+
+x (* a (* b *) c *) + y
+
+---
+
+(source_file
+  (identifier)
+  (comment)
+  (operator)
+  (identifier))
+
+==================
+unicode binder and operators
+==================
+
+∀x. p ∧ q ⇒ r
+
+---
+
+(source_file
+  (binder)
+  (identifier)
+  (operator)
+  (identifier)
+  (operator)
+  (identifier)
+  (operator)
+  (identifier))

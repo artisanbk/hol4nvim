@@ -1,0 +1,792 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/grammar.schema.json",
+  "name": "holscript",
+  "rules": {
+    "source_file": {
+      "type": "REPEAT",
+      "content": {
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "SYMBOL",
+            "name": "theory_header"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "theorem"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "definition"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "datatype"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "inductive"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "type_abbrev"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "quotation_single"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "quotation_double"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "quotation_unicode"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "quotation_mismatched"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "string"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "hol_string"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "ml_chunk"
+          }
+        ]
+      }
+    },
+    "theory_header": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_theory"
+          },
+          "named": false,
+          "value": "Theory"
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
+          }
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "attributes"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SYMBOL",
+            "name": "header_section"
+          }
+        }
+      ]
+    },
+    "header_section": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "ALIAS",
+              "content": {
+                "type": "SYMBOL",
+                "name": "_kw_ancestors"
+              },
+              "named": false,
+              "value": "Ancestors"
+            },
+            {
+              "type": "ALIAS",
+              "content": {
+                "type": "SYMBOL",
+                "name": "_kw_libs"
+              },
+              "named": false,
+              "value": "Libs"
+            }
+          ]
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "section_names"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        }
+      ]
+    },
+    "theorem": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "ALIAS",
+              "content": {
+                "type": "SYMBOL",
+                "name": "_kw_theorem"
+              },
+              "named": false,
+              "value": "Theorem"
+            },
+            {
+              "type": "ALIAS",
+              "content": {
+                "type": "SYMBOL",
+                "name": "_kw_triviality"
+              },
+              "named": false,
+              "value": "Triviality"
+            }
+          ]
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
+          }
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "attributes"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": ":"
+                },
+                {
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "SYMBOL",
+                      "name": "term"
+                    },
+                    {
+                      "type": "BLANK"
+                    }
+                  ]
+                },
+                {
+                  "type": "ALIAS",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "_kw_proof"
+                  },
+                  "named": false,
+                  "value": "Proof"
+                },
+                {
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "SYMBOL",
+                      "name": "attributes"
+                    },
+                    {
+                      "type": "BLANK"
+                    }
+                  ]
+                },
+                {
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "SYMBOL",
+                      "name": "tactics"
+                    },
+                    {
+                      "type": "BLANK"
+                    }
+                  ]
+                },
+                {
+                  "type": "ALIAS",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "_kw_qed"
+                  },
+                  "named": false,
+                  "value": "QED"
+                }
+              ]
+            },
+            {
+              "type": "STRING",
+              "value": "="
+            }
+          ]
+        }
+      ]
+    },
+    "definition": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_definition"
+          },
+          "named": false,
+          "value": "Definition"
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
+          }
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "attributes"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "STRING",
+          "value": ":"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "term"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "ALIAS",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "_kw_termination"
+                  },
+                  "named": false,
+                  "value": "Termination"
+                },
+                {
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "SYMBOL",
+                      "name": "tactics"
+                    },
+                    {
+                      "type": "BLANK"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_end"
+          },
+          "named": false,
+          "value": "End"
+        }
+      ]
+    },
+    "datatype": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_datatype"
+          },
+          "named": false,
+          "value": "Datatype"
+        },
+        {
+          "type": "STRING",
+          "value": ":"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "term"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_end"
+          },
+          "named": false,
+          "value": "End"
+        }
+      ]
+    },
+    "inductive": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "ALIAS",
+              "content": {
+                "type": "SYMBOL",
+                "name": "_kw_inductive"
+              },
+              "named": false,
+              "value": "Inductive"
+            },
+            {
+              "type": "ALIAS",
+              "content": {
+                "type": "SYMBOL",
+                "name": "_kw_coinductive"
+              },
+              "named": false,
+              "value": "CoInductive"
+            }
+          ]
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ":"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "term"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_end"
+          },
+          "named": false,
+          "value": "End"
+        }
+      ]
+    },
+    "type_abbrev": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "ALIAS",
+              "content": {
+                "type": "SYMBOL",
+                "name": "_kw_type"
+              },
+              "named": false,
+              "value": "Type"
+            },
+            {
+              "type": "ALIAS",
+              "content": {
+                "type": "SYMBOL",
+                "name": "_kw_overload"
+              },
+              "named": false,
+              "value": "Overload"
+            }
+          ]
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
+          }
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "attributes"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "STRING",
+          "value": "="
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "quotation_single"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "quotation_double"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "quotation_unicode"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "quotation_mismatched"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "string"
+            }
+          ]
+        }
+      ]
+    },
+    "term": {
+      "type": "REPEAT1",
+      "content": {
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "ALIAS",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_term_chunk"
+            },
+            "named": true,
+            "value": "term_chunk"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "quotation_single"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "quotation_double"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "quotation_unicode"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "quotation_mismatched"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "string"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "hol_string"
+          }
+        ]
+      }
+    },
+    "tactics": {
+      "type": "REPEAT1",
+      "content": {
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "ALIAS",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_tactic_chunk"
+            },
+            "named": true,
+            "value": "tactic_chunk"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "quotation_single"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "quotation_double"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "quotation_unicode"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "quotation_mismatched"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "string"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "hol_string"
+          }
+        ]
+      }
+    },
+    "identifier": {
+      "type": "PATTERN",
+      "value": "[A-Za-z][A-Za-z0-9_']*"
+    },
+    "string": {
+      "type": "TOKEN",
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "\""
+          },
+          {
+            "type": "REPEAT",
+            "content": {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "PATTERN",
+                  "value": "[^\"\\\\]"
+                },
+                {
+                  "type": "PATTERN",
+                  "value": "\\\\[\\s\\S]"
+                }
+              ]
+            }
+          },
+          {
+            "type": "STRING",
+            "value": "\""
+          }
+        ]
+      }
+    },
+    "hol_string": {
+      "type": "TOKEN",
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "«"
+          },
+          {
+            "type": "PATTERN",
+            "value": "[^»]*"
+          },
+          {
+            "type": "STRING",
+            "value": "»"
+          }
+        ]
+      }
+    }
+  },
+  "extras": [
+    {
+      "type": "PATTERN",
+      "value": "\\s"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "comment"
+    }
+  ],
+  "conflicts": [],
+  "precedences": [],
+  "externals": [
+    {
+      "type": "SYMBOL",
+      "name": "comment"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "ml_chunk"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_term_chunk"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_tactic_chunk"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_kw_theorem"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_kw_triviality"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_kw_definition"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_kw_datatype"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_kw_inductive"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_kw_coinductive"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_kw_type"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_kw_overload"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_kw_proof"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_kw_termination"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_kw_qed"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_kw_end"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_kw_theory"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_kw_ancestors"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_kw_libs"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "section_names"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "quotation_single"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "quotation_double"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "quotation_unicode"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "quotation_mismatched"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "attributes"
+    }
+  ],
+  "inline": [],
+  "supertypes": [],
+  "reserved": {}
+}

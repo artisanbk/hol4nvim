@@ -1,0 +1,239 @@
+==================
+plain ML is one opaque chunk
+==================
+
+val x = 3;
+fun f y = y + x;
+
+---
+
+(source_file
+  (ml_chunk))
+
+==================
+theorem with proof
+==================
+
+Theorem add_comm:
+  !x y. x + y = y + x
+Proof
+  simp []
+QED
+
+---
+
+(source_file
+  (theorem
+    name: (identifier)
+    (term
+      (term_chunk))
+    (tactics
+      (tactic_chunk))))
+
+==================
+indented theorem still parses (regex tier could not)
+==================
+
+  Theorem indented:
+    T
+  Proof
+    simp []
+  QED
+
+---
+
+(source_file
+  (theorem
+    name: (identifier)
+    (term
+      (term_chunk))
+    (tactics
+      (tactic_chunk))))
+
+==================
+theorem with attributes on Theorem and Proof
+==================
+
+Theorem foo[simp,local]:
+  T
+Proof[exclude_simps = bar]
+  gen_tac
+QED
+
+---
+
+(source_file
+  (theorem
+    name: (identifier)
+    (attributes)
+    (term
+      (term_chunk))
+    (attributes)
+    (tactics
+      (tactic_chunk))))
+
+==================
+triviality
+==================
+
+Triviality tmp_lemma:
+  F ==> T
+Proof
+  simp []
+QED
+
+---
+
+(source_file
+  (theorem
+    name: (identifier)
+    (term
+      (term_chunk))
+    (tactics
+      (tactic_chunk))))
+
+==================
+theorem equals form binds ML
+==================
+
+Theorem foo[simp] = REWRITE_RULE [ADD_COMM] bar
+
+val after = 1;
+
+---
+
+(source_file
+  (theorem
+    name: (identifier)
+    (attributes))
+  (ml_chunk))
+
+==================
+definition
+==================
+
+Definition fact_def:
+  fact 0 = 1 /\
+  fact (SUC n) = SUC n * fact n
+End
+
+---
+
+(source_file
+  (definition
+    name: (identifier)
+    (term
+      (term_chunk))))
+
+==================
+definition with termination
+==================
+
+Definition div_def[simp]:
+  div m n = if n = 0 then 0 else 1 + div (m - n) n
+Termination
+  WF_REL_TAC `measure FST`
+End
+
+---
+
+(source_file
+  (definition
+    name: (identifier)
+    (attributes)
+    (term
+      (term_chunk))
+    (tactics
+      (tactic_chunk)
+      (quotation_single))))
+
+==================
+datatype
+==================
+
+Datatype:
+  tree = Leaf | Node tree 'a tree
+End
+
+---
+
+(source_file
+  (datatype
+    (term
+      (term_chunk))))
+
+==================
+inductive and coinductive
+==================
+
+Inductive reach:
+  (!x. reach x x) /\
+  (!x y z. edge x y /\ reach y z ==> reach x z)
+End
+
+CoInductive safe:
+  !s. step s s' /\ safe s' ==> safe s
+End
+
+---
+
+(source_file
+  (inductive
+    name: (identifier)
+    (term
+      (term_chunk)))
+  (inductive
+    name: (identifier)
+    (term
+      (term_chunk))))
+
+==================
+type abbreviation and overload
+==================
+
+Type set = “:'a -> bool”
+Overload mem = “\x s. s x”
+
+---
+
+(source_file
+  (type_abbrev
+    name: (identifier)
+    (quotation_unicode))
+  (type_abbrev
+    name: (identifier)
+    (quotation_unicode)))
+
+==================
+blocks separated by ML
+==================
+
+open listTheory;
+
+Theorem one:
+  T
+Proof
+  simp []
+QED
+
+val helper = 42;
+
+Definition two:
+  two = 2
+End
+
+---
+
+(source_file
+  (ml_chunk)
+  (theorem
+    name: (identifier)
+    (term
+      (term_chunk))
+    (tactics
+      (tactic_chunk)))
+  (ml_chunk)
+  (definition
+    name: (identifier)
+    (term
+      (term_chunk))))

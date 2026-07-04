@@ -7,5 +7,8 @@ examples/*.uo
 examples/*.ui
 examples/.hol/
 
+# built tree-sitter parser (make parsers); the C sources are vendored
+parser/
+
 .claude/*
 CLAUDE.md

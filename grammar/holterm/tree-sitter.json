@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "holterm",
+      "scope": "source.holterm",
+      "file-types": [],
+      "injection-regex": "^holterm$"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "HOL4 term-language grammar for hol4nvim injections"
+  }
+}
