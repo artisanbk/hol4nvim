@@ -100,7 +100,7 @@ end
        resolved through $PATH and symlinks; <root>/bin/hol implies <root>,
        accepted when it looks like a HOL tree (has tools/)
     3. $HOLDIR (last resort, e.g. layouts where hol is not under a bin/)
-  holdeptool (\l), the default global fifo path, and vimhol.sml discovery
+  holdeptool (hl), the default global fifo path, and vimhol.sml discovery
   (7a) all route through this, so one `holdir` option -- or nothing at all,
   when hol itself is discoverable -- configures everything.
 --]]
@@ -178,7 +178,7 @@ end
 --[[
   Auto-bootstrap Vimhol into a freshly spawned REPL (Phase 7a), replacing
   upstream's hand-edited ~/.hol-config.sml. Without Vimhol tailing the
-  session's pipe, multi-line sends and \c silently degrade to the raw pty.
+  session's pipe, multi-line sends and hc silently degrade to the raw pty.
 
   Fed straight into the pty, NOT through send(): the pipe this enables is
   not up yet. No timing games either -- hol evaluates stdin only after
@@ -328,6 +328,11 @@ M.open = function()
 	table.insert(M.sessions, { buf = buf, job = job, pipe = pipe })
 
 	bootstrap_vimhol(job)
+
+	-- Announce the new session so higher layers (e.g. completion) can react
+	-- without repl depending on them. Fired after the session is recorded and
+	-- bootstrapped, so a listener's send() has a live transport.
+	vim.api.nvim_exec_autocmds("User", { pattern = "HolReplStarted", modeline = false })
 
 	--[[
     Assign unique, informative buffer name: "hol (<bufnr>): <FooScript>".
@@ -539,12 +544,21 @@ end
 
 --[[
   send_document: send the entire buffer as one batch (no upstream
-  equivalent; mapped to \! and :HolSendDocument). `open` declarations are
+  equivalent; mapped to h! and :HolSendDocument). `open` declarations are
   dropped: in an interactive session, `open` of a theory that is not loaded
-  yet fails -- use the load keymap (\l) over the open lines first instead.
+  yet fails -- use the load keymap (hl) over the open lines first instead.
   An `open` may span lines; it is taken to continue over nonblank lines of
   bare identifiers, ending at one that carries a ";".
+
+  New-style script headers (`Theory name` + `Ancestors`/`Libs` name lists)
+  are dropped for the same reason: their interactive meaning IS opens of
+  possibly-unloaded theories -- hl over the header handles them. A section's
+  names may sit on the keyword line or on indented continuation lines;
+  blank lines only continue the header when a section keyword follows.
 --]]
+local header_section = "^Ancestors%f[%W][%s%w_.']*$"
+local header_section2 = "^Libs%f[%W][%s%w_.']*$"
+
 local function without_opens(lines)
 	local kept, i = {}, 1
 	while i <= #lines do
@@ -561,6 +575,31 @@ local function without_opens(lines)
 					ended = true
 				end
 			end
+		elseif line:find("^Theory%f[%W]") then
+			i = i + 1
+			while i <= #lines do
+				local hdr = lines[i]
+				if hdr:find(header_section) or hdr:find(header_section2) then
+					i = i + 1
+				elseif hdr:find("^%s+[%w_.'][%s%w_.']*$") then
+					i = i + 1 -- indented bare-name continuation
+				elseif hdr:find("^%s*$") then
+					local j = i + 1
+					while j <= #lines and lines[j]:find("^%s*$") do
+						j = j + 1
+					end
+					if
+						j <= #lines
+						and (lines[j]:find(header_section) or lines[j]:find(header_section2))
+					then
+						i = j + 1
+					else
+						break
+					end
+				else
+					break
+				end
+			end
 		else
 			kept[#kept + 1] = line
 			i = i + 1
@@ -571,7 +610,7 @@ end
 
 M.send_document = function()
 	if vim.fn.mode():match("[vV\22]") then
-		vim.cmd("normal! \27") -- \! pressed from visual mode: leave it
+		vim.cmd("normal! \27") -- h! pressed from visual mode: leave it
 	end
 	local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
 	local text = stripped_or_warn(table.concat(without_opens(lines), "\n"))
@@ -619,6 +658,8 @@ local function holdeptool()
 	end
 	return ""
 end
+-- Exposed for :checkhealth (health.lua) so it probes exactly what hl uses.
+M.holdeptool = holdeptool
 
 local function send_load(text)
 	text = stripped_or_warn(text)
@@ -673,6 +714,10 @@ local function send_load(text)
 			.. table.concat(names, " ")
 			.. ' completed\\n";',
 	}, "\n"))
+
+	-- Newly loaded theories bring new theorems into the DB; let listeners
+	-- (completion) resnapshot. Same decoupling as HolReplStarted.
+	vim.api.nvim_exec_autocmds("User", { pattern = "HolLoaded", modeline = false })
 end
 
 M.send_load_line = function()
@@ -721,7 +766,7 @@ M.rotate = function(count)
 end
 
 --[[
-  Display toggles (port of the \y and \n mappings, hol.vim:272-273).
+  Display toggles (port of the hy and hn mappings, hol.vim:272-273).
 --]]
 M.toggle_types = function()
 	M.send("Globals.show_types := not (!Globals.show_types);")

@@ -3,7 +3,7 @@
 
   ftplugin/hol4script.lua calls attach() for each hol4script buffer. One spec
   entry per map keeps the table aligned with upstream hol.vim's letters (see
-  ROADMAP.md for the full reference); \w is kept as an alias of \s for
+  ROADMAP.md for the full reference); hw is kept as an alias of hs for
   upstream muscle memory (there it is the terminal-transport send; here the
   transports are unified behind send()).
 
@@ -16,6 +16,7 @@ local M = {}
 local function specs()
 	local repl = require("hol4nvim.repl")
 	local select = require("hol4nvim.select")
+	local search = require("hol4nvim.search")
 	return {
 		-- session
 		{ "n", "x", repl.open, "Start REPL" },
@@ -54,6 +55,10 @@ local function specs()
 		{ "n", "r", repl.restart, "Restart current goal" },
 		{ "n", "R", repl.rotate, "Rotate subgoals (count)" },
 		{ "n", "c", repl.interrupt, "Interrupt running tactic" },
+		-- theorem database search (renders results in a scratch split)
+		{ "n", "f", search.find, "Search theorems by name" },
+		{ "n", "m", search.match, "Search theorems by term" },
+		{ "x", "m", search.match_visual, "Search theorems by selected term" },
 		-- selection helpers (no REPL: they make the selection to send)
 		{ "n", "t", select.term, "Select `term`" },
 		{ "n", "T", select.quoted_term, "Select ``term``" },
@@ -67,6 +72,21 @@ local function specs()
 		{ "x", "h", "h", "Pass h through" },
 		{ "o", "h", "h", "Pass h through" },
 	}
+end
+
+--- The distinct suffix keys (the char after the prefix) across all maps.
+--- health.lua uses these to know which `prefix..suffix` lhs's exist, so the
+--- prefix/leader collision check stays in sync with the registry above.
+M.suffixes = function()
+	local seen, out = {}, {}
+	for _, spec in ipairs(specs()) do
+		local suffix = spec[2]
+		if not seen[suffix] then
+			seen[suffix] = true
+			out[#out + 1] = suffix
+		end
+	end
+	return out
 end
 
 --- Install the buffer-local keymaps for the current buffer.

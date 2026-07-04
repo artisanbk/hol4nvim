@@ -584,6 +584,9 @@ for _, spec in ipairs({
 	{ "n", "r" },
 	{ "n", "R" },
 	{ "n", "c" },
+	{ "n", "f" },
+	{ "n", "m" },
+	{ "x", "m" },
 	{ "n", "t" },
 	{ "n", "T" },
 	{ "n", "a" },
@@ -637,12 +640,24 @@ t.check(
 -- send_document: whole buffer, open declarations dropped (single- and
 -- multi-line), comments stripped; capture what reaches send()
 vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+	"Theory thunk_betaProof",
+	"Ancestors",
+	"  string option pure_misc",
+	"  rich_list",
+	"",
+	"Libs",
+	"  term_tactic monadsyntax",
 	"open HolKernel boolLib;",
 	"val a = 1;",
 	"open arithmeticTheory",
 	"     realTheory;",
 	"(* a comment mentioning Theorem foo: with no QED *)",
 	"val b = 2;",
+	"Theorem indented_names_survive:",
+	"  T",
+	"Proof",
+	"  gen_tac",
+	"QED",
 })
 local sent = nil
 local saved_send = repl_for_guard.send
@@ -666,11 +681,29 @@ t.check(
 	"send_document strips comments",
 	sent ~= nil and sent:find("Theorem foo") == nil
 )
+t.check(
+	"send_document drops a new-style Theory header",
+	sent ~= nil
+		and sent:find("thunk_betaProof") == nil
+		and sent:find("Ancestors") == nil
+		and sent:find("pure_misc") == nil
+		and sent:find("rich_list") == nil
+)
+t.check(
+	"send_document drops Libs across the blank line",
+	sent ~= nil and sent:find("Libs") == nil and sent:find("term_tactic") == nil
+)
+t.check(
+	"send_document keeps code after the header",
+	sent ~= nil
+		and sent:find("Theorem indented_names_survive") ~= nil
+		and sent:find("gen_tac") ~= nil
+)
 
 vim.notify = saved_notify
 repl_for_guard.config.transport = saved_transport
 
--- selection helpers (\t \T \a) on a scratch hol4script buffer
+-- selection helpers (ht hT ha) on a scratch hol4script buffer
 vim.cmd("enew")
 vim.bo.filetype = "hol4script"
 vim.api.nvim_buf_set_lines(0, 0, -1, false, {
@@ -761,6 +794,11 @@ vim.api.nvim_buf_set_lines(0, 0, -1, false, {
 	"(* note *)",
 })
 vim.bo.filetype = "hol4script"
+-- these tests assert the REGEX tier (the documented fallback); when the
+-- 5b parser is built, the ftplugin attaches tree-sitter and disables the
+-- regex syntax, so force the regex path for this buffer
+pcall(vim.treesitter.stop, 0)
+vim.bo.syntax = "hol4script"
 local function syn_at(l, c)
 	return vim.fn.synIDattr(vim.fn.synID(l, c, false), "name")
 end
@@ -770,5 +808,295 @@ t.check("Proof keyword highlighted", syn_at(3, 1) == "MLKeyword")
 t.check("cheat flagged as error", syn_at(4, 3) == "MLCheat")
 t.check("QED highlighted", syn_at(5, 1) == "HOLQED")
 t.check("comment highlighted", syn_at(6, 3) == "MLComment")
+
+-- ---------------------------------------------------------------------------
+-- Phase 6a: :checkhealth hol4nvim (lua/hol4nvim/health.lua). HOL-free: the
+-- prefix/leader collision core is a pure function, and check() is driven with
+-- a stubbed vim.health that collects {level, msg, advice} tuples.
+-- ---------------------------------------------------------------------------
+local health = require("hol4nvim.health")
+local keymaps_mod = require("hol4nvim.keymaps")
+
+-- prefix_collisions: a global map that extends a hol map lhs (prefix+suffix)
+-- forces a 'timeoutlen' wait; unrelated maps do not. (Prefix "h" mirrors the
+-- demo init's <localleader>.)
+do
+	local sfx = keymaps_mod.suffixes()
+	local hit = health.prefix_collisions("h", sfx, { "hsx", "hee", "gg", "hz" })
+	local by = {}
+	for _, c in ipairs(hit) do
+		by[c.hol] = c.culprit
+	end
+	t.check(
+		"prefix_collisions flags hs (hsx) and he (hee)",
+		#hit == 2 and by["hs"] == "hsx" and by["he"] == "hee"
+	)
+	t.check(
+		"prefix_collisions ignores wrong-prefix / non-suffix maps",
+		health.prefix_collisions("h", sfx, { "gg", "hz", "kkk" })[1] == nil
+	)
+end
+
+-- check(): stub vim.health, collect entries, and drive known-bad configs.
+do
+	local rec = {}
+	local function push(level)
+		return function(msg, advice)
+			rec[#rec + 1] = { level = level, msg = msg, advice = advice }
+		end
+	end
+	local save_health = vim.health
+	vim.health = {
+		start = push("start"),
+		ok = push("ok"),
+		info = push("info"),
+		warn = push("warn"),
+		error = push("error"),
+	}
+	local function find(level, pat)
+		for _, e in ipairs(rec) do
+			if e.level == level and e.msg:find(pat, 1, true) then
+				return e
+			end
+		end
+		return nil
+	end
+
+	local save = {
+		hol_cmd = repl.config.hol_cmd,
+		holdir = repl.config.holdir,
+		prefix = repl.config.prefix,
+	}
+	local save_env = vim.env.HOLDIR
+
+	-- (1) missing hol -> an error whose advice names hol_cmd / holdir
+	repl.config.hol_cmd, repl.config.holdir, vim.env.HOLDIR = "/nonexistent/hol", nil, nil
+	rec = {}
+	health.check()
+	local err = find("error", "not executable")
+	local names_opt = false
+	for _, a in ipairs(err and err.advice or {}) do
+		if a:find("hol_cmd", 1, true) or a:find("holdir", 1, true) then
+			names_opt = true
+		end
+	end
+	t.check("health errors on missing hol, advice names hol_cmd/holdir", err ~= nil and names_opt)
+
+	-- (2) prefix on the leader + a longer global map -> 'timeoutlen' warning
+	vim.keymap.set("n", "hsx", "<nop>")
+	vim.keymap.set("n", "hee", "<nop>")
+	repl.config.prefix = nil -- -> <localleader>, which is "h" in the demo init
+	rec = {}
+	health.check()
+	t.check("health warns on prefix/leader collision", find("warn", "timeoutlen") ~= nil)
+	t.check("collision warning names the delayed hol map", find("warn", "hs is delayed") ~= nil)
+	pcall(vim.keymap.del, "n", "hsx")
+	pcall(vim.keymap.del, "n", "hee")
+
+	-- (3) collision gone -> keymaps section is silent (ok, no timeoutlen warn)
+	rec = {}
+	health.check()
+	t.check(
+		"no collision -> keymaps section ok",
+		find("warn", "timeoutlen") == nil and find("ok", "no colliding") ~= nil
+	)
+
+	repl.config.hol_cmd, repl.config.holdir = save.hol_cmd, save.holdir
+	repl.config.prefix, vim.env.HOLDIR = save.prefix, save_env
+	vim.health = save_health
+end
+
+-- ---------------------------------------------------------------------------
+-- Search window (search.lua): the SML query builder is pure -- assert the DB
+-- call, the sentinel, the always-writes-sentinel handler, letter-first
+-- identifiers (a leading "_" is not a valid SML identifier), and escaping.
+-- ---------------------------------------------------------------------------
+local search = require("hol4nvim.search")
+do
+	local name = search.find_cmd("ASSOC", "/tmp/out")
+	t.check("find_cmd emits DB.find", name:find('DB.find "ASSOC"', 1, true) ~= nil)
+	t.check("find_cmd writes the sentinel", name:find(search.SENTINEL, 1, true) ~= nil)
+	t.check(
+		"find_cmd always writes the sentinel on error",
+		name:find("handle hnv_e", 1, true) ~= nil
+	)
+	t.check(
+		"builder uses letter-first identifiers (no leading _)",
+		name:find("val _", 1, true) == nil and name:find("fun _", 1, true) == nil
+	)
+
+	local term = search.match_cmd("x + y", "/tmp/out")
+	t.check(
+		"match_cmd emits DB.apropos with a parsed term",
+		term:find('DB.apropos (Parse.Term [QUOTE "x + y"])', 1, true) ~= nil
+	)
+
+	t.check(
+		"query is escaped into an SML string literal",
+		search.find_cmd([[a"b\c]], "/tmp/out"):find([[DB.find "a\"b\\c"]], 1, true) ~= nil
+	)
+end
+
+-- The interactive panel opens without a session (HOL-free): assert its header
+-- denotes the search type, that <CR> is bound, and that picking a result line
+-- inserts the theorem name at the origin window's cursor.
+do
+	-- origin window: a scratch buffer with the cursor inside `rw[]`
+	vim.cmd("enew")
+	local origin = vim.api.nvim_get_current_win()
+	local obuf = vim.api.nvim_get_current_buf()
+	vim.api.nvim_buf_set_lines(obuf, 0, -1, false, { "rw[]" })
+	vim.api.nvim_win_set_cursor(origin, { 1, 3 }) -- on the ']'
+
+	search.find() -- opens the panel; origin_win = the window above
+	pcall(vim.cmd, "stopinsert")
+	local pbuf = vim.api.nvim_get_current_buf()
+	local first = vim.api.nvim_buf_get_lines(pbuf, 0, 2, false)
+	t.check("hf panel header denotes a name search", (first[1] or ""):find("NAME") ~= nil)
+	local map = vim.fn.maparg("<CR>", "n", false, true)
+	t.check("panel binds <CR>", type(map) == "table" and map.buffer == 1)
+
+	-- plant results and pick the one on line 4
+	vim.bo[pbuf].modifiable = true
+	vim.api.nvim_buf_set_lines(pbuf, 0, -1, false, {
+		first[1],
+		"ASSOC",
+		"--- (1 hits) ---",
+		"arithmetic.ADD_ASSOC: |- !m n p. m + (n + p) = m + n + p",
+	})
+	vim.api.nvim_win_set_cursor(vim.api.nvim_get_current_win(), { 4, 0 })
+	search.on_enter() -- returns focus to origin and inserts there
+	t.check(
+		"picking a result inserts the theorem name at the origin cursor",
+		vim.api.nvim_buf_get_lines(obuf, 0, 1, false)[1] == "rw[ADD_ASSOC]"
+	)
+	t.check("picked name is also yanked", vim.fn.getreg('"') == "ADD_ASSOC")
+
+	pcall(function()
+		if vim.api.nvim_win_is_valid(origin) then
+			vim.api.nvim_set_current_win(origin)
+		end
+		vim.cmd("only")
+	end)
+end
+
+-- ---------------------------------------------------------------------------
+-- Completion (completion.lua): the enumeration builder is pure -- assert the
+-- DB call, the private filter, the always-writes-sentinel handler, letter-first
+-- identifiers, and escaping. The parser, item shaping, toggle, and the thin
+-- nvim-cmp source object are all exercised HOL-free.
+-- ---------------------------------------------------------------------------
+local completion = require("hol4nvim.completion")
+do
+	local cmd = completion.enumerate_cmd("/tmp/out")
+	t.check("enumerate_cmd emits DB.listDB", cmd:find("DB.listDB", 1, true) ~= nil)
+	t.check("enumerate_cmd filters private theorems", cmd:find("private", 1, true) ~= nil)
+	t.check("enumerate_cmd writes the sentinel", cmd:find(completion.SENTINEL, 1, true) ~= nil)
+	t.check(
+		"enumerate_cmd always writes the sentinel on error",
+		cmd:find("handle hnv_e", 1, true) ~= nil
+	)
+	t.check(
+		"enumerate builder uses letter-first identifiers (no leading _)",
+		cmd:find("val _", 1, true) == nil and cmd:find("fun _", 1, true) == nil
+	)
+	t.check(
+		"enumerate is a single line (pty-safe, needs no pipe)",
+		cmd:find("\n", 1, true) == nil
+	)
+	t.check(
+		"outfile is escaped into an SML string literal",
+		completion.enumerate_cmd([[/tmp/a"b\c]]):find([["/tmp/a\"b\\c"]], 1, true) ~= nil
+	)
+end
+
+-- parse_names: tab-split, dedup by bare name, nil until the sentinel arrives.
+do
+	local pending = completion.parse_names({ "ADD_ASSOC\tarithmetic" })
+	t.check("parse_names returns nil before the sentinel", pending == nil)
+
+	local items = completion.parse_names({
+		"ADD_ASSOC\tarithmetic",
+		"ADD_ASSOC\tnum", -- duplicate name, different theory: collapses
+		"MULT_ASSOC\tarithmetic",
+		completion.SENTINEL .. " (3 names)",
+	})
+	t.check("parse_names dedups by name", type(items) == "table" and #items == 2)
+	t.check(
+		"parse_names keeps name + theory",
+		items[1].label == "ADD_ASSOC" and items[1].detail == "arithmetic"
+	)
+end
+
+-- items(): static tactics plus cached theorem names, each cmp-shaped.
+do
+	completion.config.tactics = true
+	completion.config.theorems = true
+	completion.cache.theorems = { { label = "FOO_THM", detail = "foo" } }
+	completion.cache.loaded = true
+	local its = completion.items()
+	local labels = {}
+	for _, it in ipairs(its) do
+		labels[it.label] = it
+	end
+	t.check("items include a known tactic", labels["rw"] ~= nil)
+	t.check(
+		"items include cached theorems with a <thy>Theory detail",
+		labels["FOO_THM"] ~= nil and labels["FOO_THM"].detail == "fooTheory"
+	)
+
+	completion.config.tactics = false
+	local no_tac = completion.items()
+	local has_rw = false
+	for _, it in ipairs(no_tac) do
+		if it.label == "rw" then
+			has_rw = true
+		end
+	end
+	t.check("tactics = false drops the tactic vocabulary", not has_rw)
+	completion.config.tactics = true
+end
+
+-- toggle flips the master switch (what :HolCompletionToggle drives).
+do
+	completion.config.enabled = true
+	completion.toggle()
+	t.check("toggle disables completion", completion.is_enabled() == false)
+	completion.toggle()
+	t.check("toggle re-enables completion", completion.is_enabled() == true)
+end
+
+-- the nvim-cmp source object (no real cmp needed: it only requires completion).
+do
+	local src = require("hol4nvim.cmp").new()
+	vim.cmd("enew")
+	vim.bo.filetype = "lua"
+	t.check("source unavailable outside hol4script", src:is_available() == false)
+
+	vim.bo.filetype = "hol4script"
+	completion.config.enabled = true
+	t.check("source available in a hol4script buffer", src:is_available() == true)
+	completion.config.enabled = false
+	t.check("source unavailable when completion is toggled off", src:is_available() == false)
+	completion.config.enabled = true
+
+	t.check(
+		"keyword pattern admits the prime in theorem names",
+		src:get_keyword_pattern():find("'", 1, true) ~= nil
+	)
+
+	local got
+	src:complete({}, function(res)
+		got = res
+	end)
+	t.check(
+		"complete calls back with items",
+		type(got) == "table" and type(got.items) == "table" and #got.items > 0
+	)
+end
+
+-- setup() registered the completion commands.
+t.check("command :HolCompletionRefresh", vim.fn.exists(":HolCompletionRefresh") == 2)
+t.check("command :HolCompletionToggle", vim.fn.exists(":HolCompletionToggle") == 2)
 
 t.finish()

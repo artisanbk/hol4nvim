@@ -28,19 +28,19 @@ local function hol_select(lpat, rpat)
 	return true
 end
 
---- \t : select the enclosing `term` (ASCII or ‘smart’ quotes).
+--- ht : select the enclosing `term` (ASCII or ‘smart’ quotes).
 M.term = function()
 	hol_select("`\\|‘", "`\\|’")
 end
 
---- \T : select the enclosing ``term`` (or “smart” quotes).
+--- hT : select the enclosing ``term`` (or “smart” quotes).
 M.quoted_term = function()
 	hol_select("``\\|“", "``\\|”")
 end
 
 --[[
-  \a : select the enclosing Theorem/Triviality block's statement + Proof
-  lines -- exactly the selection \G wants. Upstream selects Theorem..Proof,
+  ha : select the enclosing Theorem/Triviality block's statement + Proof
+  lines -- exactly the selection hG wants. Upstream selects Theorem..Proof,
   then `Vo+` makes it linewise and shifts the start down one line, dropping
   the Theorem line itself.
 --]]
