@@ -26,6 +26,7 @@ test-ts: parsers
 test-e2e:
 	$(NVIM) --headless -u init.lua -l tests/e2e.lua examples/TestScript.sml
 	$(NVIM) --headless -u init.lua -l tests/e2e_preload.lua
+	$(NVIM) --headless -u init.lua -l tests/e2e_external.lua
 
 # Compile the vendored parser C for every grammar (what a user's lazy `build`
 # hook runs; the only requirement is a C compiler). A grammar's scanner.c is

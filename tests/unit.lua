@@ -1099,4 +1099,201 @@ end
 t.check("command :HolCompletionRefresh", vim.fn.exists(":HolCompletionRefresh") == 2)
 t.check("command :HolCompletionToggle", vim.fn.exists(":HolCompletionToggle") == 2)
 
+-- external-session loader (:HolExternalSetup): a machine-agnostic Vimhol loader
+-- $HOL_CONFIG can point at, so a hol you start yourself attaches to the fifo.
+do
+	t.check(
+		"hol_config_path lives under the nvim data dir",
+		repl.hol_config_path():match("hol4nvim/hol%-config%.sml$") ~= nil
+	)
+
+	local content =
+		repl.hol_config_content("/opt/hol/tools/editor-modes/vim/vimhol.sml")
+	t.check(
+		"loader guards on #lookupStruct Vimhol (no double-tail)",
+		content:find('#lookupStruct PolyML.globalNameSpace "Vimhol"', 1, true) ~= nil
+	)
+	t.check(
+		"loader runs the user's own hol-config first, in hol's $HOME search order",
+		content:find('getEnv "HOME"', 1, true) ~= nil
+			and content:find('"hol-config.sml"', 1, true) ~= nil
+			and content:find('".hol-config.sml"', 1, true) ~= nil
+	)
+	t.check(
+		"loader derives vimhol.sml from $HOLDIR at runtime (machine-agnostic)",
+		content:find('getEnv "HOLDIR"', 1, true) ~= nil
+			and content:find("tools/editor-modes/vim/vimhol.sml", 1, true) ~= nil
+	)
+	t.check(
+		"loader bakes the resolved path as a fallback candidate",
+		content:find('"/opt/hol/tools/editor-modes/vim/vimhol.sml"', 1, true) ~= nil
+	)
+	t.check(
+		"loader escapes backslashes and quotes in the baked path",
+		repl.hol_config_content([[/a\b/"c"/vimhol.sml]]):find(
+			[[/a\\b/\"c\"/vimhol.sml]],
+			1,
+			true
+		) ~= nil
+	)
+
+	-- vimhol_sml's fifo-dir fallback (what stops the recipe from degrading to a
+	-- "<HOLDIR>" placeholder): holdir resolves but has no vimhol.sml, while the
+	-- fifo's own directory does.
+	local saved = {
+		vimhol = repl.config.vimhol,
+		holdir = repl.config.holdir,
+		fifo = repl.config.fifo,
+	}
+	local empty = vim.fn.tempname()
+	vim.fn.mkdir(empty, "p")
+	local fdir = vim.fn.tempname()
+	vim.fn.mkdir(fdir, "p")
+	vim.fn.writefile({ "(* stub *)" }, fdir .. "/vimhol.sml")
+	repl.config.vimhol = true
+	repl.config.holdir = empty -- no tools/.../vimhol.sml under here
+	repl.config.fifo = fdir .. "/fifo"
+	t.check(
+		"vimhol_sml falls back to the fifo's directory",
+		repl.vimhol_sml() == fdir .. "/vimhol.sml"
+	)
+	local ext_recipe = repl.external_recipe()
+	t.check(
+		"external_recipe resolves a real vimhol path (no <HOLDIR> placeholder)",
+		ext_recipe:find("<HOLDIR>", 1, true) == nil
+			and ext_recipe:find(fdir .. "/vimhol.sml", 1, true) ~= nil
+	)
+	t.check(
+		"external_recipe advertises the permanent :HolExternalSetup",
+		ext_recipe:find("HolExternalSetup", 1, true) ~= nil
+	)
+	repl.config.vimhol, repl.config.holdir, repl.config.fifo =
+		saved.vimhol, saved.holdir, saved.fifo
+end
+
+t.check("command :HolExternalSetup", vim.fn.exists(":HolExternalSetup") == 2)
+
+-- managed shell-rc block (:HolExternalSetup writing the export for the user):
+-- shell detection, block syntax, idempotent splicing, and target precedence.
+do
+	t.check(
+		"rc_shell_kind detects fish from a config.fish path",
+		repl.rc_shell_kind("/home/me/.config/fish/config.fish") == "fish"
+	)
+	t.check(
+		"rc_shell_kind detects fish from the shell binary name",
+		repl.rc_shell_kind("/usr/bin/fish") == "fish"
+	)
+	t.check(
+		"rc_shell_kind treats zsh/bash rc as posix",
+		repl.rc_shell_kind("/home/me/.zshrc") == "posix"
+			and repl.rc_shell_kind("/home/me/.bashrc") == "posix"
+	)
+
+	local env = { HOL_CONFIG = "/x/loader.sml", VIMHOL_FIFO = "/x/fifo" }
+	local posix = repl.shell_rc_block(env, "posix")
+	t.check(
+		"posix block is bounded by the managed markers",
+		posix[1] == repl.rc_marker_begin and posix[#posix] == repl.rc_marker_end
+	)
+	t.check(
+		"posix block exports both vars with `export`",
+		vim.tbl_contains(posix, "export HOL_CONFIG='/x/loader.sml'")
+			and vim.tbl_contains(posix, "export VIMHOL_FIFO='/x/fifo'")
+	)
+	local fish = repl.shell_rc_block(env, "fish")
+	t.check(
+		"fish block uses `set -gx`, not export",
+		vim.tbl_contains(fish, "set -gx HOL_CONFIG '/x/loader.sml'")
+			and not vim.tbl_contains(fish, "export HOL_CONFIG='/x/loader.sml'")
+	)
+
+	local block = repl.shell_rc_block(env, "posix")
+	local function count_markers(lines)
+		local n = 0
+		for _, l in ipairs(lines) do
+			if l == repl.rc_marker_begin then
+				n = n + 1
+			end
+		end
+		return n
+	end
+
+	-- append: existing content is preserved, block added after a separator.
+	local out, replaced = repl.splice_rc({ "# rc", "alias foo=bar" }, block)
+	t.check(
+		"splice_rc appends and preserves existing lines",
+		not replaced
+			and out[1] == "# rc"
+			and out[2] == "alias foo=bar"
+			and count_markers(out) == 1
+	)
+	-- idempotent: splicing a fresh (different) block replaces in place, once.
+	local block2 =
+		repl.shell_rc_block({ HOL_CONFIG = "/y/l.sml", VIMHOL_FIFO = "/y/f" }, "posix")
+	local out2, replaced2 = repl.splice_rc(out, block2)
+	t.check(
+		"splice_rc replaces an existing block in place (idempotent)",
+		replaced2
+			and count_markers(out2) == 1
+			and out2[1] == "# rc"
+			and vim.tbl_contains(out2, "export HOL_CONFIG='/y/l.sml'")
+			and not vim.tbl_contains(out2, "export HOL_CONFIG='/x/loader.sml'")
+	)
+
+	-- write_shell_rc end-to-end: needs external_env to resolve, so point
+	-- vimhol.sml at a fifo-dir stub the way the loader test above does.
+	local saved = {
+		vimhol = repl.config.vimhol,
+		holdir = repl.config.holdir,
+		fifo = repl.config.fifo,
+		shell_rc = repl.config.shell_rc,
+	}
+	local empty = vim.fn.tempname()
+	vim.fn.mkdir(empty, "p")
+	local fdir = vim.fn.tempname()
+	vim.fn.mkdir(fdir, "p")
+	vim.fn.writefile({ "(* stub *)" }, fdir .. "/vimhol.sml")
+	repl.config.vimhol = true
+	repl.config.holdir = empty
+	repl.config.fifo = fdir .. "/fifo"
+	repl.config.shell_rc = nil
+
+	local target = vim.fn.tempname() .. ".zshrc"
+	vim.fn.writefile({ "# existing rc" }, target)
+	local res = repl.write_shell_rc(target)
+	t.check(
+		"write_shell_rc adds a block to the given target",
+		res ~= nil and res.action == "added" and res.path == vim.fs.normalize(target)
+	)
+	local written = vim.fn.readfile(target)
+	t.check(
+		"write_shell_rc preserves the target and exports the derived HOL_CONFIG",
+		written[1] == "# existing rc"
+			and count_markers(written) == 1
+			and vim.tbl_contains(written, "export HOL_CONFIG='" .. res.env.HOL_CONFIG .. "'")
+	)
+	local res2 = repl.write_shell_rc(target)
+	t.check(
+		"re-running updates the block in place (one marker)",
+		res2 ~= nil
+			and res2.action == "updated"
+			and count_markers(vim.fn.readfile(target)) == 1
+	)
+
+	-- config.shell_rc is used when no explicit target is passed.
+	local configured = vim.fn.tempname() .. ".bashrc"
+	repl.config.shell_rc = configured
+	local res3 = repl.write_shell_rc(nil)
+	t.check(
+		"write_shell_rc falls back to config.shell_rc",
+		res3 ~= nil
+			and res3.path == vim.fs.normalize(configured)
+			and vim.fn.filereadable(configured) == 1
+	)
+
+	repl.config.vimhol, repl.config.holdir, repl.config.fifo, repl.config.shell_rc =
+		saved.vimhol, saved.holdir, saved.fifo, saved.shell_rc
+end
+
 t.finish()

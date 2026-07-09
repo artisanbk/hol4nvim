@@ -90,6 +90,7 @@ Other deliberate divergences from upstream:
 | Syntax highlighting | `hol4script.vim` | `syntax/hol4script.vim` (5a regex fallback) + `holscript` tree-sitter grammar (5b: script structure, indented blocks, matched quote delimiters, incremental reparse) + injections (5c: SML into ML/tactics, `holterm` into terms/quotations) | ✅ |
 | Theorem search | --- | `hf` `hm` / `:HolFind` `:HolMatch` (`search.lua`): `DB.find` name + `DB.apropos` term search in an interactive panel | ✅ (Phase 8) |
 | Insert-mode completion | --- | `completion.lua` + `cmp.lua`: nvim-cmp source of static HOL tactics + live theorem names (`DB.listDB`), refreshed off `HolReplStarted`/`HolLoaded`; `:HolCompletionToggle` / `:HolCompletionRefresh` | ✅ (Phase 9) |
+| External-session auto-setup | --- | `:HolExternalSetup` (`repl.write_hol_config` / `repl.write_shell_rc`): generates a machine-agnostic `$HOL_CONFIG` loader in the data dir and appends a managed `export` block to your shell rc (`$SHELL`-derived or `shell_rc`) so a hol you start yourself attaches Vimhol to the fifo — chains your own hol-config first, guarded so no double-tail; no `~/.hol-config.sml` written | ✅ (Phase 10) |
 
 Test infrastructure (not an upstream feature, but load-bearing here):
 `make test` = `tests/unit.lua` (HOL-free: ftdetect, commands, transforms,
@@ -568,6 +569,52 @@ Phase 8 complete ✅
     native blink.cmp source (blink can consume this one via `blink.compat`).
 
 Phase 9 complete ✅
+
+### Phase 10 --- External-session auto-setup
+
+-   [x] **`:HolExternalSetup`** (`repl.write_hol_config` /
+    `repl.external_env`, driven from `init.lua`): makes a hol you start
+    yourself in a terminal (not the `hx` in-vim REPL) attach to the Vimhol
+    fifo out of the box. The plugin can't inject into a process it didn't
+    spawn, so instead it writes a loader that hol's own config mechanism picks
+    up: pointing `$HOL_CONFIG` at `stdpath("data")/hol4nvim/hol-config.sml`
+    makes any hol attach Vimhol. The command writes the loader (also ensuring
+    the fifo exists) and appends a **managed `export HOL_CONFIG=... /
+    VIMHOL_FIFO=...` block** to the user's shell rc (`repl.write_shell_rc` /
+    `repl.splice_rc`; fish gets `set -gx`). **No `~/.hol-config.sml` is
+    created** --- the loader lives in Neovim's data dir (the user asked not to
+    scatter dotfiles).
+
+    The rc is derived from `$SHELL` (`~/.zshrc`, `~/.bashrc`, fish
+    `config.fish`), overridable via the `shell_rc` option or a
+    `:HolExternalSetup <path>` argument. Writing is **opt-in**: only the
+    explicit command touches a shell rc --- never `setup()`. The block sits
+    between markers so re-running rewrites it in place (idempotent, current
+    paths) and deleting the block undoes it cleanly.
+
+    The loader is **machine-agnostic** by construction: `$HOME` is read at
+    hol-runtime (no home path baked in) and `vimhol.sml` is resolved from
+    `$HOLDIR` at runtime, falling back to the path `vimhol_sml()` resolved when
+    it was written. Because `$HOL_CONFIG` *replaces* hol's own
+    `~/.hol-config.sml` search (`tools/check-intconfig.sml`), the loader runs
+    the user's own hol-config first (in hol's exact `$HOME` search order), then
+    attaches Vimhol --- guarded via `#lookupStruct` so a config that already
+    loaded Vimhol is not loaded (and re-tailed) a second time. Regenerated on
+    every `setup()` so it never goes stale.
+
+    Deliberately does **not** set `vim.env.HOL_CONFIG` globally: that would
+    silently reroute the proven `hx` config-loading for every user. The
+    export/alias is opt-in; once added it applies to `hx` too, which is exactly
+    why the loader chains the user's own config rather than replacing it.
+
+    Also fixes the external recipe's `<HOLDIR>` placeholder: `vimhol_sml()`
+    gains a fallback that looks beside the resolved fifo when `holdir()` can't
+    be determined. The loader content/escaping and the fallback are unit-tested;
+    `tests/e2e_external.lua` boots a real hol against the generated loader to
+    prove the SML parses and attaches exactly one tail. `:checkhealth` reports
+    the loader and whether `$HOL_CONFIG` points at it.
+
+Phase 10 complete ✅
 
 ## Keep in view (not primary)
 

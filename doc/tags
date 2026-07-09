@@ -1,5 +1,6 @@
 :HolCompletionRefresh	hol4nvim.txt	/*:HolCompletionRefresh*
 :HolCompletionToggle	hol4nvim.txt	/*:HolCompletionToggle*
+:HolExternalSetup	hol4nvim.txt	/*:HolExternalSetup*
 :HolFind	hol4nvim.txt	/*:HolFind*
 :HolMatch	hol4nvim.txt	/*:HolMatch*
 :HolSend	hol4nvim.txt	/*:HolSend*
@@ -23,6 +24,7 @@ hol4nvim-hb	hol4nvim.txt	/*hol4nvim-hb*
 hol4nvim-hc	hol4nvim.txt	/*hol4nvim-hc*
 hol4nvim-he	hol4nvim.txt	/*hol4nvim-he*
 hol4nvim-health	hol4nvim.txt	/*hol4nvim-health*
+hol4nvim-hes	hol4nvim.txt	/*hol4nvim-hes*
 hol4nvim-hf	hol4nvim.txt	/*hol4nvim-hf*
 hol4nvim-hg	hol4nvim.txt	/*hol4nvim-hg*
 hol4nvim-hl	hol4nvim.txt	/*hol4nvim-hl*
@@ -39,6 +41,7 @@ hol4nvim-opt-hol_cmd	hol4nvim.txt	/*hol4nvim-opt-hol_cmd*
 hol4nvim-opt-holdir	hol4nvim.txt	/*hol4nvim-opt-holdir*
 hol4nvim-opt-keymaps	hol4nvim.txt	/*hol4nvim-opt-keymaps*
 hol4nvim-opt-prefix	hol4nvim.txt	/*hol4nvim-opt-prefix*
+hol4nvim-opt-shell_rc	hol4nvim.txt	/*hol4nvim-opt-shell_rc*
 hol4nvim-opt-split	hol4nvim.txt	/*hol4nvim-opt-split*
 hol4nvim-opt-start_insert	hol4nvim.txt	/*hol4nvim-opt-start_insert*
 hol4nvim-opt-transport	hol4nvim.txt	/*hol4nvim-opt-transport*

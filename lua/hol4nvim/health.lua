@@ -167,6 +167,25 @@ M.check = function()
 		end
 	end
 
+	-- external-session loader (HOL_CONFIG) ---------------------------------
+	h.start("hol4nvim: external session (:HolExternalSetup)")
+	local loader = repl.hol_config_path()
+	if vim.fn.filereadable(loader) == 1 then
+		h.ok("Vimhol loader written: " .. loader)
+	elseif repl.vimhol_sml() then
+		h.info("loader not written yet: " .. loader .. " (:HolExternalSetup, or restart nvim, writes it)")
+	else
+		h.info("loader unavailable: vimhol.sml not resolved (see the vimhol check above)")
+	end
+	local hol_config = vim.env.HOL_CONFIG
+	if not hol_config or hol_config == "" then
+		h.info("$HOL_CONFIG unset -- add the export from :HolExternalSetup to your shell rc for external hol")
+	elseif hol_config == loader then
+		h.ok("$HOL_CONFIG points at the loader -- an external hol will attach Vimhol")
+	else
+		h.info("$HOL_CONFIG set elsewhere: " .. hol_config .. " (external hol uses that, not hol4nvim's loader)")
+	end
+
 	-- tree-sitter syntax tier ----------------------------------------------
 	h.start("hol4nvim: tree-sitter syntax tier")
 	for _, lang in ipairs({ "holscript", "holterm", "sml" }) do

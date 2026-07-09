@@ -19,6 +19,7 @@ M.config = {
 	holdir = nil, -- HOL root; else derived from the hol binary, else $HOLDIR
 	vimhol = true, -- auto-load vimhol.sml into spawned REPLs; false | "/path"
 	abbreviations = false, -- ASCII->unicode insert abbreviations (holabs)
+	shell_rc = nil, -- rc file :HolExternalSetup writes to; else derived from $SHELL
 }
 
 -- Stack of { buf = <bufnr>, job = <chan id>, pipe = <fifo path> }.
@@ -158,7 +159,25 @@ M.vimhol_sml = function()
 			end
 		end
 	end
+
+	-- Fallback: vimhol.sml sits beside the fifo in the default layout. When
+	-- holdir can't be resolved but a fifo path is known ($VIMHOL_FIFO or
+	-- config.fifo), look there -- this is what stops the external-session
+	-- recipe from degrading to a "<HOLDIR>" placeholder.
+	local fpath = require("hol4nvim.fifo").path()
+	if fpath then
+		local cand = vim.fn.fnamemodify(fpath, ":h") .. "/vimhol.sml"
+		if vim.fn.filereadable(cand) == 1 then
+			return cand
+		end
+	end
+
 	return nil
+end
+
+-- Escape a Lua string as an SML double-quoted literal (quotes included).
+local function sml_str(s)
+	return '"' .. s:gsub("\\", "\\\\"):gsub('"', '\\"') .. '"'
 end
 
 --[[
@@ -168,11 +187,10 @@ end
   the 7c external-session recipe.
 --]]
 local function guarded_use(path)
-	local sml = path:gsub("\\", "\\\\"):gsub('"', '\\"')
 	return 'val _ = (case #lookupStruct PolyML.globalNameSpace "Vimhol" of'
-		.. ' NONE => use "'
-		.. sml
-		.. '" | SOME _ => ());'
+		.. ' NONE => use '
+		.. sml_str(path)
+		.. ' | SOME _ => ());'
 end
 
 --[[
@@ -239,6 +257,230 @@ M.external_recipe = function()
 		.. path
 		.. "' hol\npaste into it:  "
 		.. paste
+		.. "\nor set it up once, permanently:  :HolExternalSetup"
+end
+
+--[[
+  External-session auto-setup (out-of-the-box `hl`/`hs` against a hol you start
+  in your own terminal). The plugin cannot inject into a hol it did not spawn,
+  so it instead writes a loader that hol's own config mechanism picks up:
+  pointing $HOL_CONFIG at hol_config_path() makes any hol attach Vimhol to the
+  fifo. See :HolExternalSetup, which prints the one export line to add.
+
+  The loader lives in Neovim's data dir (one managed file), NOT ~/.hol-config.sml.
+--]]
+M.hol_config_path = function()
+	return vim.fn.stdpath("data") .. "/hol4nvim/hol-config.sml"
+end
+
+--[[
+  The loader's SML. Machine-agnostic by construction: $HOME is read at
+  hol-runtime (no home path is baked in) and vimhol.sml is located from $HOLDIR
+  at runtime, falling back to the `vimhol_path` hol4nvim resolved here. Because
+  $HOL_CONFIG REPLACES hol's own ~/.hol-config.sml search (check-intconfig.sml),
+  the loader runs the user's own hol-config first, then attaches Vimhol --
+  guarded via #lookupStruct so a config that already loaded Vimhol is not loaded
+  (and re-tailed) twice. Identifiers are letter-first (hnv_*) for the SML lexer.
+--]]
+local hol_config_template = [[
+(* hol4nvim: generated Vimhol loader -- DO NOT EDIT (regenerated on setup).
+   Point $HOL_CONFIG at this file so `hol` attaches Vimhol to the fifo and
+   hol4nvim can drive an external session (see :HolExternalSetup). $HOL_CONFIG
+   replaces hol's own ~/.hol-config.sml search, so we run your hol-config first,
+   then attach Vimhol (guarded, so a preloading config is not re-tailed). *)
+local
+  fun hnv_readable f =
+    (OS.FileSys.access (f, [OS.FileSys.A_READ])
+     andalso not (OS.FileSys.isDir f)) handle OS.SysErr _ => false
+  fun hnv_useFirst [] = ()
+    | hnv_useFirst (f :: fs) =
+        if hnv_readable f then use f else hnv_useFirst fs
+  val hnv_vimhol =
+    (case OS.Process.getEnv "HOLDIR" of
+         SOME hnv_d => [OS.Path.concat (hnv_d, "tools/editor-modes/vim/vimhol.sml"),
+                        OS.Path.concat (hnv_d, "tools/vim/vimhol.sml")]
+       | NONE => []) @ [%s]
+in
+  val () =
+    (case OS.Process.getEnv "HOME" of
+         NONE => ()
+       | SOME hnv_home =>
+           hnv_useFirst (List.map (fn n => OS.Path.concat (hnv_home, n))
+             ["hol-config.sml", "hol-config.ML", ".hol-config",
+              ".hol-config.sml", ".hol-config.ML"]));
+  val () =
+    (case #lookupStruct PolyML.globalNameSpace "Vimhol" of
+         NONE => hnv_useFirst hnv_vimhol
+       | SOME _ => ())
+end;
+]]
+
+M.hol_config_content = function(vimhol_path)
+	return string.format(hol_config_template, sml_str(vimhol_path))
+end
+
+--[[
+  Write the loader to hol_config_path(), returning the path. Regenerated in
+  place on every call so it always reflects the current vimhol.sml resolution.
+  Returns nil plus a reason when vimhol.sml cannot be resolved (there would be
+  nothing useful to load) -- callers surface it.
+--]]
+M.write_hol_config = function()
+	local vimhol = M.vimhol_sml()
+	if not vimhol then
+		return nil, "vimhol.sml not resolved (set config.holdir or config.vimhol)"
+	end
+	local path = M.hol_config_path()
+	vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")
+	vim.fn.writefile(
+		vim.split(M.hol_config_content(vimhol), "\n", { plain = true }),
+		path
+	)
+	return path
+end
+
+--[[
+  The environment an external hol needs to attach to this plugin's fifo:
+  HOL_CONFIG -> the generated loader (attaches Vimhol), VIMHOL_FIFO -> the exact
+  fifo hol4nvim sends to, so both sides agree regardless of vimhol.sml's own
+  compiled-in default. Writes the loader and ensures the fifo exists. Returns
+  nil plus a reason when either path cannot be resolved.
+--]]
+M.external_env = function()
+	local path, reason = M.write_hol_config()
+	if not path then
+		return nil, reason
+	end
+	local fifo = require("hol4nvim.fifo")
+	local fpath = fifo.path()
+	if not fpath then
+		return nil, "no fifo path (set config.fifo or config.holdir)"
+	end
+	fifo.ensure(fpath)
+	return { HOL_CONFIG = path, VIMHOL_FIFO = fpath }
+end
+
+--[[
+  Managed shell-rc block (opt-in, only on an explicit :HolExternalSetup). We
+  write the derived export lines between markers so re-running updates them in
+  place and deleting the block removes them cleanly -- the plugin never edits a
+  shell rc on setup(), only when the user asks. Fish needs `set -gx`, not
+  `export`; both marker lines are ordinary comments in either shell.
+--]]
+M.rc_marker_begin = "# >>> hol4nvim (managed) >>>"
+M.rc_marker_end = "# <<< hol4nvim (managed) <<<"
+
+local function sh_squote(s) -- POSIX single-quote (…'\''… for embedded quotes)
+	return "'" .. s:gsub("'", "'\\''") .. "'"
+end
+local function fish_squote(s) -- fish single-quote (backslash-escapes \ and ')
+	return "'" .. s:gsub("\\", "\\\\"):gsub("'", "\\'") .. "'"
+end
+
+-- "fish" when the rc/shell name says so, else "posix" (zsh/bash/sh).
+M.rc_shell_kind = function(hint)
+	local name = vim.fn.fnamemodify(hint or vim.env.SHELL or "", ":t")
+	if name:match("fish") then
+		return "fish"
+	end
+	return "posix"
+end
+
+-- The default rc for $SHELL, or nil when we can't tell (caller asks for a path).
+M.default_rc = function()
+	local shell = vim.fn.fnamemodify(vim.env.SHELL or "", ":t")
+	if shell == "zsh" then
+		return vim.fn.expand("~/.zshrc")
+	elseif shell == "bash" then
+		return vim.fn.expand("~/.bashrc")
+	elseif shell == "fish" then
+		return vim.fn.expand("~/.config/fish/config.fish")
+	end
+	return nil
+end
+
+-- The managed block for `env` in `kind` ("posix"/"fish") syntax, markers included.
+M.shell_rc_block = function(env, kind)
+	local set
+	if kind == "fish" then
+		set = function(n, v)
+			return "set -gx " .. n .. " " .. fish_squote(v)
+		end
+	else
+		set = function(n, v)
+			return "export " .. n .. "=" .. sh_squote(v)
+		end
+	end
+	return {
+		M.rc_marker_begin,
+		"# hol started in your terminal attaches Vimhol to hol4nvim's fifo.",
+		"# Managed by :HolExternalSetup -- re-run to update, delete this block to undo.",
+		set("HOL_CONFIG", env.HOL_CONFIG),
+		set("VIMHOL_FIFO", env.VIMHOL_FIFO),
+		M.rc_marker_end,
+	}
+end
+
+-- Splice `block` into `existing` (list of lines): replace an existing marked
+-- block in place, else append it after a blank separator. Returns the new lines
+-- and whether a block was replaced (vs. added). Pure -- unit-tested directly.
+M.splice_rc = function(existing, block)
+	local out, replaced = {}, false
+	local i, n = 1, #existing
+	while i <= n do
+		if existing[i] == M.rc_marker_begin then
+			for _, l in ipairs(block) do
+				out[#out + 1] = l
+			end
+			replaced = true
+			while i <= n and existing[i] ~= M.rc_marker_end do
+				i = i + 1
+			end
+			i = i + 1 -- step past the end marker (or past EOF if unterminated)
+		else
+			out[#out + 1] = existing[i]
+			i = i + 1
+		end
+	end
+	if not replaced then
+		if #out > 0 and out[#out] ~= "" then
+			out[#out + 1] = ""
+		end
+		for _, l in ipairs(block) do
+			out[#out + 1] = l
+		end
+	end
+	return out, replaced
+end
+
+--[[
+  Write the managed export block to a shell rc, resolved in precedence order:
+  the explicit `target` (from `:HolExternalSetup <path>`), then config.shell_rc,
+  then the default rc for $SHELL. Idempotent: an existing block is rewritten in
+  place with current paths. Returns { path, action = "updated"|"added", env } or
+  nil plus a reason (no fifo/vimhol, or no detectable shell). Only
+  :HolExternalSetup calls this -- setup() never touches a shell rc.
+--]]
+M.write_shell_rc = function(target)
+	local env, reason = M.external_env()
+	if not env then
+		return nil, reason
+	end
+	local configured = M.config.shell_rc
+	local path = (target and target ~= "") and target
+		or (configured and configured ~= "" and configured)
+		or M.default_rc()
+	if not path then
+		return nil,
+			"could not detect your shell rc from $SHELL -- set config.shell_rc or pass a path (e.g. :HolExternalSetup ~/.zshrc)"
+	end
+	path = vim.fs.normalize(path)
+	local existing = vim.fn.filereadable(path) == 1 and vim.fn.readfile(path) or {}
+	local block = M.shell_rc_block(env, M.rc_shell_kind(path))
+	local out, replaced = M.splice_rc(existing, block)
+	vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")
+	vim.fn.writefile(out, path)
+	return { path = path, action = replaced and "updated" or "added", env = env }
 end
 
 --[[

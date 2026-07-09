@@ -4,6 +4,31 @@ All notable changes to hol4nvim are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### External-session auto-setup
+- `:HolExternalSetup` makes a `hol` you start yourself in a terminal (not the
+  in-vim `hx` REPL) attach to the Vimhol fifo out of the box. It writes a
+  machine-agnostic loader to `stdpath("data")/hol4nvim/hol-config.sml` and
+  appends a managed `export HOL_CONFIG=… VIMHOL_FIFO=…` block to your shell rc
+  (fish gets `set -gx`). **No `~/.hol-config.sml` is created** — the loader
+  lives in Neovim's data dir.
+- The rc is derived from `$SHELL` (`~/.zshrc`, `~/.bashrc`, `config.fish`);
+  the new `shell_rc` option or a `:HolExternalSetup <path>` argument overrides
+  it. The block is written only on the explicit command, between markers, so
+  re-running updates it in place and deleting the block undoes it — the plugin
+  never edits a shell rc on `setup()`.
+- The loader resolves `$HOME` and `vimhol.sml` (from `$HOLDIR`) at hol-runtime,
+  so it is not tied to the machine that wrote it, and is regenerated on every
+  `setup()`. Because `$HOL_CONFIG` replaces HOL's own config search, it runs
+  your own hol-config first, then attaches Vimhol — guarded so a preloading
+  config is never re-tailed.
+- The "no fifo reader" recipe now resolves a real `vimhol.sml` path instead of
+  a `<HOLDIR>` placeholder when only the fifo path is known, and points at
+  `:HolExternalSetup` for the permanent one-time setup.
+- `:checkhealth hol4nvim` reports the loader file and whether `$HOL_CONFIG`
+  points at it.
+
 ## [0.1.0] — 2026-07-04
 
 First release. Full parity with HOL4's upstream `tools/editor-modes/vim/`
@@ -95,4 +120,5 @@ Maps are shown with `<localleader>` set to `h` (HOL's convention), e.g. `hx`.
   precedence over the built-in `*.sml` → `sml` while leaving plain SML alone.
   Compatible with `ft = "hol4script"` lazy-loading.
 
+[Unreleased]: https://github.com/artisanbk/hol4nvim/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/artisanbk/hol4nvim/releases/tag/v0.1.0

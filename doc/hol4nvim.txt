@@ -140,6 +140,13 @@ abbreviations              false ~
         `\/`, `==>`, `<=>`, `!`, `?`, `IN`, `SUBSET`, ... then space to get
         `∧ ∨ ⇒ ⇔ ∀ ∃ ∈ ⊆`).
 
+                                                      *hol4nvim-opt-shell_rc*
+shell_rc                   nil ~
+        Shell rc |:HolExternalSetup| writes its managed block to. nil derives
+        it from `$SHELL` (`~/.zshrc`, `~/.bashrc`, fish `config.fish`); a
+        string forces a path (also overridable per call: `:HolExternalSetup
+        ~/.myrc`). `~` is expanded.
+
 ==============================================================================
 5. FILETYPE DETECTION                                      *hol4nvim-filetype*
 
@@ -239,6 +246,17 @@ Passthrough ~
 :HolFind [name]         Search theorems by name (DB.find); prompts if no arg.
                                                                   *:HolMatch*
 :HolMatch [term]        Search theorems by term pattern (DB.apropos).
+                                          *:HolExternalSetup* *hol4nvim-hes*
+:HolExternalSetup [rc]  Set up an external HOL session (one you start in your
+                        own terminal) to attach to the Vimhol fifo out of the
+                        box. Writes a machine-agnostic loader to the data dir
+                        and appends a managed `export HOL_CONFIG=... /
+                        VIMHOL_FIFO=...` block to your shell rc; no
+                        `~/.hol-config.sml` is created. The rc is derived from
+                        `$SHELL` or |hol4nvim-opt-shell_rc|; the optional [rc]
+                        argument overrides it for one call. Re-running updates
+                        the block in place; delete it to undo. See
+                        |hol4nvim-transport|.
                                                      *:HolCompletionRefresh*
 :HolCompletionRefresh   Resnapshot theorem names for completion from the
                         live session.
@@ -349,6 +367,31 @@ REPLs started by |hol4nvim-hx| get Vimhol loaded automatically -- no
 hol-config already loads Vimhol it does nothing, and it announces itself with
 a `hol4nvim: vimhol ready` line once the session can take fifo-routed sends.
 
+To make a hol you start YOURSELF (in your own terminal, not |hol4nvim-hx|)
+attach to the fifo out of the box, run |:HolExternalSetup| once. It writes a
+machine-agnostic loader to `stdpath("data")/hol4nvim/hol-config.sml` and
+appends a managed block to your shell rc pointing `$HOL_CONFIG` at it: >
+
+    # >>> hol4nvim (managed) >>>
+    export HOL_CONFIG='.../hol4nvim/hol-config.sml'
+    export VIMHOL_FIFO='.../tools/editor-modes/vim/fifo'
+    # <<< hol4nvim (managed) <<<
+<
+The rc is derived from `$SHELL` (`~/.zshrc`, `~/.bashrc`, fish `config.fish`,
+which gets `set -gx`); override with |hol4nvim-opt-shell_rc| or a one-off
+`:HolExternalSetup ~/.myrc`. The block is written only when you run the
+command -- never on plugin load -- between markers, so re-running updates it
+and deleting it undoes the change. Start (or restart) hol, or `source` the
+file, for it to take effect.
+
+Every `hol` you then start attaches Vimhol and `hl`/`hs`/... reach it. No
+`~/.hol-config.sml` is created: because `$HOL_CONFIG` REPLACES hol's own
+config search, the loader runs your own hol-config first (if any), then
+attaches Vimhol -- guarded, so a preloading config is never re-tailed. It
+resolves vimhol.sml from `$HOLDIR` at runtime (with a baked fallback), so it
+is not tied to the machine that wrote it, and is regenerated on every
+|setup()|.
+
 ==============================================================================
 12. HEALTH CHECK                                             *hol4nvim-health*
 
@@ -359,6 +402,8 @@ failure:
 
 - the resolved hol binary, HOL root, holdeptool, and vimhol.sml;
 - the fifo path, whether it exists, and whether a reader is attached;
+- the external-session loader (|:HolExternalSetup|) and whether `$HOL_CONFIG`
+  points at it;
 - whether the tree-sitter parsers (holscript, holterm, sml) are built and
   loadable, or an ABI mismatch prevents loading;
 - whether nvim-cmp is present for completion and how many theorem names are

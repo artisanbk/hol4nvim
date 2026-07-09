@@ -39,6 +39,8 @@ See [ROADMAP.md](ROADMAP.md) for parity status with the upstream vim config.
       keymaps = true,         -- false disables all buffer-local keymaps
       prefix = "<localleader>", -- keymap prefix
       abbreviations = false,  -- holabs ASCII->unicode insert abbreviations
+      shell_rc = nil,         -- rc file :HolExternalSetup writes to; else
+                              -- derived from $SHELL (or pass a path to it)
       completion = {          -- insert-mode completion (needs nvim-cmp)
         enabled = true,       -- master switch (:HolCompletionToggle at runtime)
         auto_setup = true,    -- register + add the source to hol4script's cmp
@@ -50,8 +52,8 @@ See [ROADMAP.md](ROADMAP.md) for parity status with the upstream vim config.
 }
 ```
 
-Path options (`hol_cmd`, `holdir`, `fifo`, a string `vimhol`) may use `~`;
-it is expanded by `setup()`.
+Path options (`hol_cmd`, `holdir`, `fifo`, `shell_rc`, a string `vimhol`)
+may use `~`; it is expanded by `setup()`.
 
 In practice the whole config is `holdir` — the hol binary, holdeptool,
 the fifo, and vimhol.sml all derive from it — and even `holdir` only when
@@ -85,6 +87,38 @@ REPLs started by `hx` get Vimhol loaded automatically — no `~/.hol-config.sml`
 needed. The bootstrap is a guarded `use`: if your hol-config (or `$HOL_CONFIG`)
 already loads Vimhol it does nothing, and it announces itself with a
 `hol4nvim: vimhol ready` line once the session can take fifo-routed sends.
+
+### External sessions out of the box (`:HolExternalSetup`)
+
+To drive a `hol` you start yourself in a terminal (not the in-vim `hx` REPL),
+that session has to load Vimhol so it tails the fifo. Run `:HolExternalSetup`
+once: it writes a small, machine-agnostic loader to Neovim's data dir
+(`stdpath("data")/hol4nvim/hol-config.sml`) and appends a managed block to your
+shell rc that points `$HOL_CONFIG` at it:
+
+```sh
+# >>> hol4nvim (managed) >>>
+export HOL_CONFIG='…/hol4nvim/hol-config.sml'
+export VIMHOL_FIFO='…/tools/editor-modes/vim/fifo'
+# <<< hol4nvim (managed) <<<
+```
+
+The rc is chosen from `$SHELL` (`~/.zshrc`, `~/.bashrc`, or fish's
+`config.fish`, which gets `set -gx` instead of `export`); override it with
+`config.shell_rc = "~/.myrc"` or a one-off `:HolExternalSetup ~/.myrc`. The
+block is written **only** when you run the command — never on plugin load —
+between markers, so re-running updates it in place and deleting the block
+removes it cleanly. Start (or restart) hol, or `source` the file, and it takes
+effect.
+
+After that, every `hol` you start attaches Vimhol and `hl`/`hs`/… reach it —
+no per-session paste. **No `~/.hol-config.sml` is created**: the loader lives
+in the data dir, and because `$HOL_CONFIG` *replaces* HOL's own config search,
+it runs your own hol-config first (if any) and then attaches Vimhol, guarded so
+a preloading config is never re-tailed. The loader resolves `vimhol.sml` from
+`$HOLDIR` at runtime (falling back to the path resolved when it was written),
+so it is not tied to the machine that generated it. The plugin regenerates the
+loader on every `setup()`, so it stays current.
 
 ## Keymaps
 
@@ -123,7 +157,8 @@ selections are not sent.
 
 Commands: `:HolStart`, `:HolStop`, `:HolSend` (range-aware), `:HolSendDocument`,
 `:HolUnabbrev` (unicode → ASCII, whole buffer or range), `:HolFind [name]`,
-`:HolMatch [term]`.
+`:HolMatch [term]`, `:HolExternalSetup` (external-session loader; see above),
+`:HolCompletionRefresh`, `:HolCompletionToggle`.
 
 Full docs live in `:help hol4nvim`. If anything misbehaves, run
 `:checkhealth hol4nvim`: it reports the resolved hol binary, HOL root,
