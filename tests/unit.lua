@@ -405,6 +405,61 @@ t.check(
 repl.config.hol_cmd = "/nonexistent/hol"
 t.check("vimhol_sml nil when nothing resolves", repl.vimhol_sml() == nil)
 
+-- The second return distinguishes "you switched it off" from "we looked and
+-- found nothing" -- they need different fixes, and "not resolved" implied the
+-- wrong one (a broken HOL install) for a deliberate vimhol = false.
+do
+	local saved_vimhol, saved_holdir = repl.config.vimhol, repl.config.holdir
+	local saved_cmd, saved_fifo = repl.config.hol_cmd, repl.config.fifo
+
+	repl.config.vimhol = false
+	local vh, why = repl.vimhol_sml()
+	t.check("vimhol_sml reports disabled", vh == nil and why == "disabled")
+	t.check(
+		"vimhol_reason names config.vimhol when disabled",
+		repl.vimhol_reason(why):match("config%.vimhol = false") ~= nil
+	)
+
+	repl.config.vimhol = true
+	repl.config.hol_cmd, repl.config.fifo = "/nonexistent/hol", "/nonexistent/fifo"
+	repl.config.holdir = "/nonexistent/holroot"
+	local vh2, why2 = repl.vimhol_sml()
+	t.check("vimhol_sml reports notfound", vh2 == nil and why2 == "notfound")
+	t.check(
+		"vimhol_reason names where it looked",
+		repl.vimhol_reason(why2):match("/nonexistent/holroot") ~= nil
+	)
+
+	repl.config.vimhol, repl.config.holdir = saved_vimhol, saved_holdir
+	repl.config.hol_cmd, repl.config.fifo = saved_cmd, saved_fifo
+end
+
+-- The resolvers expand `~` themselves. setup() also normalizes on the way in,
+-- but health.lua/tests/other callers drive repl.config directly, and a literal
+-- "~/..." fails every filereadable() check while the error still says "set
+-- config.holdir" -- for a holdir that is set and correct.
+do
+	local saved_holdir, saved_vimhol = repl.config.holdir, repl.config.vimhol
+	local saved_cmd = repl.config.hol_cmd
+
+	repl.config.hol_cmd = "/nonexistent/hol"
+	repl.config.holdir = "~/some/hol"
+	t.check(
+		"holdir expands ~",
+		repl.holdir() == vim.fs.normalize("~/some/hol")
+			and repl.holdir():match("^~") == nil
+	)
+
+	repl.config.vimhol = "~/some/vimhol.sml"
+	t.check(
+		"vimhol_sml expands ~ in an explicit path",
+		repl.vimhol_sml() == vim.fs.normalize("~/some/vimhol.sml")
+	)
+
+	repl.config.holdir, repl.config.vimhol = saved_holdir, saved_vimhol
+	repl.config.hol_cmd = saved_cmd
+end
+
 -- fifo.path resolution priority: config > $VIMHOL_FIFO > the holdir default
 repl.config.fifo = "/explicit/fifo"
 vim.env.VIMHOL_FIFO = "/env/fifo"

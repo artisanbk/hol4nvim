@@ -130,15 +130,18 @@ M.check = function()
 	-- vimhol.sml (hx bootstrap) --------------------------------------------
 	h.start("hol4nvim: vimhol auto-bootstrap (hx)")
 	if cfg.vimhol == false then
-		h.info("vimhol = false: auto-bootstrap disabled; multi-line sends and hc use the raw pty")
+		h.warn("vimhol = false: auto-bootstrap disabled", {
+			"multi-line sends and hc degrade to the raw pty",
+			"external sessions are unavailable too: :HolExternalSetup needs vimhol.sml",
+			"set vimhol = true (the default) unless your own hol-config loads Vimhol",
+		})
 	else
-		local vh = repl.vimhol_sml()
+		local vh, why = repl.vimhol_sml()
 		if vh then
 			h.ok("vimhol.sml: " .. vh)
 		else
-			h.warn("vimhol.sml not found under holdir", {
+			h.warn(repl.vimhol_reason(why), {
 				"REPLs still work, but multi-line sends and hc degrade to the raw pty",
-				"set config.holdir, or config.vimhol to an explicit path",
 			})
 		end
 	end
@@ -170,16 +173,40 @@ M.check = function()
 	-- external-session loader (HOL_CONFIG) ---------------------------------
 	h.start("hol4nvim: external session (:HolExternalSetup)")
 	local loader = repl.hol_config_path()
+	local vh, vh_why = repl.vimhol_sml()
 	if vim.fn.filereadable(loader) == 1 then
 		h.ok("Vimhol loader written: " .. loader)
-	elseif repl.vimhol_sml() then
+	elseif vh then
 		h.info("loader not written yet: " .. loader .. " (:HolExternalSetup, or restart nvim, writes it)")
 	else
-		h.info("loader unavailable: vimhol.sml not resolved (see the vimhol check above)")
+		h.info("loader unavailable: " .. repl.vimhol_reason(vh_why))
 	end
+
+	-- Is the managed block actually in the rc? "$HOL_CONFIG unset" alone can't
+	-- tell "never set up" from "set up, but this shell predates it" -- the
+	-- distinction every external-session problem turns on.
+	local rc = (cfg.shell_rc and cfg.shell_rc ~= "" and cfg.shell_rc) or repl.default_rc()
+	if rc then
+		rc = vim.fs.normalize(rc)
+		local has_block = false
+		if vim.fn.filereadable(rc) == 1 then
+			for _, line in ipairs(vim.fn.readfile(rc)) do
+				if line == repl.rc_marker_begin then
+					has_block = true
+					break
+				end
+			end
+		end
+		if has_block then
+			h.ok("managed block present in " .. rc)
+		else
+			h.info("no managed block in " .. rc .. " (run :HolExternalSetup, or set auto_shell_rc = true)")
+		end
+	end
+
 	local hol_config = vim.env.HOL_CONFIG
 	if not hol_config or hol_config == "" then
-		h.info("$HOL_CONFIG unset -- add the export from :HolExternalSetup to your shell rc for external hol")
+		h.info("$HOL_CONFIG unset in this nvim -- if you just ran :HolExternalSetup, start a new shell and a new hol")
 	elseif hol_config == loader then
 		h.ok("$HOL_CONFIG points at the loader -- an external hol will attach Vimhol")
 	else

@@ -30,10 +30,20 @@
   "Termination"
   "QED"
   "End"
-  "Theory"
+] @keyword
+
+; The new-style theory header. Deliberately NOT plain @keyword: the names
+; these introduce are @module, and a colorscheme that renders @keyword and
+; @module alike leaves "Ancestors" indistinguishable from the theories it
+; imports. @keyword.import / @keyword.directive are the standard captures for
+; exactly this (import statements, module declarations), so they separate in
+; any scheme that distinguishes them at all -- and stay overridable by name.
+"Theory" @keyword.directive
+
+[
   "Ancestors"
   "Libs"
-] @keyword
+] @keyword.import
 
 ":" @punctuation.delimiter
 "=" @operator

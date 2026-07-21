@@ -36,6 +36,7 @@ hol4nvim-installation	hol4nvim.txt	/*hol4nvim-installation*
 hol4nvim-introduction	hol4nvim.txt	/*hol4nvim-introduction*
 hol4nvim-mappings	hol4nvim.txt	/*hol4nvim-mappings*
 hol4nvim-opt-abbreviations	hol4nvim.txt	/*hol4nvim-opt-abbreviations*
+hol4nvim-opt-auto_shell_rc	hol4nvim.txt	/*hol4nvim-opt-auto_shell_rc*
 hol4nvim-opt-fifo	hol4nvim.txt	/*hol4nvim-opt-fifo*
 hol4nvim-opt-hol_cmd	hol4nvim.txt	/*hol4nvim-opt-hol_cmd*
 hol4nvim-opt-holdir	hol4nvim.txt	/*hol4nvim-opt-holdir*
@@ -49,6 +50,7 @@ hol4nvim-opt-vimhol	hol4nvim.txt	/*hol4nvim-opt-vimhol*
 hol4nvim-requirements	hol4nvim.txt	/*hol4nvim-requirements*
 hol4nvim-search	hol4nvim.txt	/*hol4nvim-search*
 hol4nvim-syntax	hol4nvim.txt	/*hol4nvim-syntax*
+hol4nvim-theory-header	hol4nvim.txt	/*hol4nvim-theory-header*
 hol4nvim-transport	hol4nvim.txt	/*hol4nvim-transport*
 hol4nvim-troubleshooting	hol4nvim.txt	/*hol4nvim-troubleshooting*
 hol4nvim.txt	hol4nvim.txt	/*hol4nvim.txt*

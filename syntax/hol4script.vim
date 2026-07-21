@@ -68,6 +68,14 @@ syn match   MLOperator "\$"
 
 syn region HOLString start=/«/ end=/»/ contains=MLEscChar
 
+" New-style theory header (Theory/Ancestors/Libs). Not in the upstream port,
+" which predates it -- without this the keywords go unhighlighted, rendering
+" identically to the theory and library names they introduce. The keywords get
+" their own group so they stay distinct from those names.
+syn match  HOLHeaderKey /^\<Theory\>/ skipwhite nextgroup=HOLHeaderName
+syn match  HOLHeaderKey /^\<\(Ancestors\|Libs\)\>/
+syn match  HOLHeaderName /\<[[:alnum:]_']\+\>/ contained
+
 " Definition
 syn region HOLDefnStart
       \ matchgroup=MLKeyword start="^\<Definition\>"
@@ -257,6 +265,12 @@ hi     link HOLQuoteErr  Error
 hi     link MLQuote      Delimiter
 hi     link HOLThmExtra  Special
 hi     link HOLQED       PreProc
+
+" Include, not PreProc: MLKeyword/HOLQED are already PreProc, and the point is
+" that the header reads differently from both the block keywords and the names
+" it lists (HOLHeaderName -> Identifier, as the imported names are).
+hi     link HOLHeaderKey  Include
+hi     link HOLHeaderName Identifier
 
 hi     link MLKeyword    PreProc
 hi     link MLComment    Comment

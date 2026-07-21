@@ -20,6 +20,7 @@ M.config = {
 	vimhol = true, -- auto-load vimhol.sml into spawned REPLs; false | "/path"
 	abbreviations = false, -- ASCII->unicode insert abbreviations (holabs)
 	shell_rc = nil, -- rc file :HolExternalSetup writes to; else derived from $SHELL
+	auto_shell_rc = false, -- keep that block current on setup(), no command needed
 }
 
 -- Stack of { buf = <bufnr>, job = <chan id>, pipe = <fifo path> }.
@@ -95,6 +96,21 @@ M.which_hol = function()
 end
 
 --[[
+  Expand `~` in a configured path. setup() already normalizes the path options
+  on the way in, but the resolvers are also called directly -- by health.lua,
+  by the tests, by anything driving repl.config without going through setup()
+  -- and a literal "~/..." silently fails every filereadable() check downstream,
+  producing "not resolved" errors for a path that is set and correct. Expanding
+  here makes the resolvers self-sufficient rather than trusting the caller.
+--]]
+local function expand(p)
+	if not p or p == "" then
+		return p
+	end
+	return vim.fs.normalize(p)
+end
+
+--[[
   Resolve the HOL installation root (Phase 7b). Priority:
     1. config.holdir (explicit)
     2. derived from the hol binary actually being run -- which_hol()
@@ -107,7 +123,7 @@ end
 --]]
 M.holdir = function()
 	if M.config.holdir and M.config.holdir ~= "" then
-		return M.config.holdir
+		return expand(M.config.holdir)
 	end
 
 	local hol = M.which_hol()
@@ -138,15 +154,17 @@ end
     true (default) -- discover under holdir()
     "/path"        -- explicit file
     false          -- bootstrap disabled
-  Returns nil when disabled or not found.
+  Returns nil when disabled or not found, plus a reason ("disabled"/"notfound")
+  so callers can say which -- "not resolved" reads as "your HOL install is
+  broken" when in fact the bootstrap was switched off on purpose.
 --]]
 M.vimhol_sml = function()
 	local cfg = M.config.vimhol
 	if cfg == false then
-		return nil
+		return nil, "disabled"
 	end
 	if type(cfg) == "string" and cfg ~= "" then
-		return cfg
+		return expand(cfg)
 	end
 	local holdir = M.holdir()
 	if holdir then
@@ -172,7 +190,23 @@ M.vimhol_sml = function()
 		end
 	end
 
-	return nil
+	return nil, "notfound"
+end
+
+--[[
+  Why vimhol.sml is unavailable, as a sentence for the user. Names the option
+  that actually applies: config.vimhol when the bootstrap is switched off,
+  config.holdir when we looked and found nothing (reporting where we looked).
+--]]
+M.vimhol_reason = function(why)
+	if why == "disabled" then
+		return "vimhol bootstrap is disabled (config.vimhol = false) -- external sessions need it; set vimhol = true, or vimhol = \"/path/to/vimhol.sml\""
+	end
+	local holdir = M.holdir()
+	if holdir then
+		return "vimhol.sml not found under " .. holdir .. " (set config.holdir to your HOL root, or config.vimhol to the file)"
+	end
+	return "vimhol.sml not found and no HOL directory resolved (set config.holdir, or config.vimhol to the file)"
 end
 
 -- Escape a Lua string as an SML double-quoted literal (quotes included).
@@ -326,9 +360,9 @@ end
   nothing useful to load) -- callers surface it.
 --]]
 M.write_hol_config = function()
-	local vimhol = M.vimhol_sml()
+	local vimhol, why = M.vimhol_sml()
 	if not vimhol then
-		return nil, "vimhol.sml not resolved (set config.holdir or config.vimhol)"
+		return nil, M.vimhol_reason(why)
 	end
 	local path = M.hol_config_path()
 	vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")

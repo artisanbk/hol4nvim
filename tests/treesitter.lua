@@ -126,6 +126,38 @@ t.check("attributes captured", got["attribute=[simp]"] == true)
 t.check("quotation captured", got["string.special=`T`"] == true)
 local _ = parser
 
+-- New-style theory header: the keywords must not land in the same capture as
+-- the names they introduce, or a colorscheme that colors @keyword and @module
+-- alike makes "Ancestors" indistinguishable from the theories listed under it.
+do
+	local hsrc = "Theory pure_misc\nAncestors\n  string sptree\nLibs\n  stringLib\n"
+	local hroot = tree(hsrc)
+	local hgot = {}
+	if highlights then
+		for id, node in highlights:iter_captures(hroot, hsrc) do
+			hgot[highlights.captures[id] .. "=" .. vim.treesitter.get_node_text(node, hsrc)] =
+				true
+		end
+	end
+	t.check("Theory captured as keyword.directive", hgot["keyword.directive=Theory"] == true)
+	t.check("Ancestors captured as keyword.import", hgot["keyword.import=Ancestors"] == true)
+	t.check("Libs captured as keyword.import", hgot["keyword.import=Libs"] == true)
+	t.check("theory name still captured as module", hgot["module=pure_misc"] == true)
+	t.check(
+		"imported names still captured as module",
+		hgot["module=string sptree"] == true and hgot["module=stringLib"] == true
+	)
+	-- The invariant the user actually sees: no header keyword shares a capture
+	-- with the names beside it.
+	t.check(
+		"header keywords do not share the names' capture",
+		hgot["module=Theory"] ~= true
+			and hgot["module=Ancestors"] ~= true
+			and hgot["module=Libs"] ~= true
+			and hgot["keyword=Ancestors"] ~= true
+	)
+end
+
 -- ---------------------------------------------------------------------------
 -- Phase 5c: injections. Each opaque span from the skeleton grammar hands its
 -- interior to a real grammar (sml / holterm). `make test-ts` builds every

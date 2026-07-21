@@ -128,6 +128,15 @@ M.setup = function(opts)
 	-- install where vimhol.sml can't be resolved simply skips it.
 	pcall(repl.write_hol_config)
 
+	-- opt-in: also keep the managed shell-rc block current, so an external hol
+	-- works without remembering :HolExternalSetup. Off by default -- writing to
+	-- a user's rc is only ever done on an explicit request, whether that is the
+	-- command or this flag. Idempotent, so re-running on every setup() is a
+	-- no-op once the block is correct.
+	if repl.config.auto_shell_rc then
+		pcall(repl.write_shell_rc)
+	end
+
 	-- Insert-mode completion (tactics + live theorem names). Its own config
 	-- block; setup() registers the nvim-cmp source and the refresh autocmds.
 	local completion = require("hol4nvim.completion")

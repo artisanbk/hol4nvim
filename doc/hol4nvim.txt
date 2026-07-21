@@ -147,6 +147,16 @@ shell_rc                   nil ~
         string forces a path (also overridable per call: `:HolExternalSetup
         ~/.myrc`). `~` is expanded.
 
+                                                 *hol4nvim-opt-auto_shell_rc*
+auto_shell_rc              false ~
+        When true, |hol4nvim-setup| writes and updates the managed shell-rc
+        block itself, so external hol sessions work without ever running
+        |:HolExternalSetup|. Off by default: the plugin writes to a shell rc
+        only on request, and this flag is that request, made once in your
+        config. Idempotent -- a no-op once the block is correct -- and it
+        follows your HOL if paths change. Already-open shells are unaffected;
+        the first time, start a new terminal and a new `hol`.
+
 ==============================================================================
 5. FILETYPE DETECTION                                      *hol4nvim-filetype*
 
@@ -341,11 +351,33 @@ tree-sitter (preferred) ~
         HOL term language.
 
 regex (fallback) ~
-        `syntax/hol4script.vim`, a verbatim port of upstream's highlighting.
-        Zero requirements; loads whenever the parser is not built. Its
-        limitations (block keywords only at column 0, whole-file rescans,
-        fixed term vocabulary, mixable quote delimiters) are inherited from
-        upstream unchanged.
+        `syntax/hol4script.vim`, a verbatim port of upstream's highlighting,
+        plus the new-style theory header (upstream predates it). Zero
+        requirements; loads whenever the parser is not built. Its limitations
+        (block keywords only at column 0, whole-file rescans, fixed term
+        vocabulary, mixable quote delimiters) are inherited from upstream
+        unchanged.
+
+                                                   *hol4nvim-theory-header*
+Recolouring the theory header ~
+        The header keywords are captured apart from the names they introduce,
+        so `Ancestors` never renders as one more imported theory: >
+
+            token                 tree-sitter          regex tier
+            Theory                @keyword.directive   HOLHeaderKey
+            Ancestors, Libs       @keyword.import      HOLHeaderKey
+            the names under them  @module              HOLHeaderName
+<
+        `HOLHeaderKey` links to `Include`, `HOLHeaderName` to `Identifier`.
+        If your colorscheme renders these alike anyway (some collapse all
+        `@keyword.*` to one colour), set them yourself, filetype-scoped: >
+
+            vim.api.nvim_set_hl(0, "@keyword.import.holscript",
+                                   { link = "Include" })
+            vim.api.nvim_set_hl(0, "@module.holscript",
+                                   { link = "Identifier" })
+<
+        |:Inspect| on a token reports the captures actually applied to it.
 
 Folds (tree-sitter tier, opt-in): >
 
@@ -383,6 +415,10 @@ which gets `set -gx`); override with |hol4nvim-opt-shell_rc| or a one-off
 command -- never on plugin load -- between markers, so re-running updates it
 and deleting it undoes the change. Start (or restart) hol, or `source` the
 file, for it to take effect.
+
+Set |hol4nvim-opt-auto_shell_rc| to skip the command entirely: |setup()| then
+maintains that block itself. Either way the first run needs a new terminal and
+a new `hol` -- an rc cannot reach shells that are already open.
 
 Every `hol` you then start attaches Vimhol and `hl`/`hs`/... reach it. No
 `~/.hol-config.sml` is created: because `$HOL_CONFIG` REPLACES hol's own

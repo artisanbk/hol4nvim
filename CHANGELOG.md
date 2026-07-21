@@ -28,6 +28,34 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `:HolExternalSetup` for the permanent one-time setup.
 - `:checkhealth hol4nvim` reports the loader file and whether `$HOL_CONFIG`
   points at it.
+- New `auto_shell_rc` option (default `false`): `setup()` maintains the managed
+  block itself, so external sessions need no command at all. Off by default —
+  the rc is still only written on an explicit request, which this flag is.
+
+### Syntax
+- The new-style theory header no longer colours its keywords like the names
+  they introduce. `Theory` is `@keyword.directive` and `Ancestors`/`Libs` are
+  `@keyword.import` (they were plain `@keyword`, indistinguishable from the
+  `@module` names under them in colorschemes that render the two alike). The
+  regex tier, which did not recognise the header at all and left the keywords
+  unhighlighted, now has `HOLHeaderKey` (→ `Include`) and `HOLHeaderName`
+  (→ `Identifier`). See `hol4nvim-theory-header` for overriding them.
+
+### Fixed
+- `holdir()` and `vimhol_sml()` expand `~` themselves instead of relying on
+  `setup()` to have done it. Callers that drive `repl.config` directly
+  (`:checkhealth`, tests, other plugins) got a literal `~/…` that failed every
+  `filereadable()` check, then an error telling them to set `config.holdir` —
+  which was set, and correct.
+- `vimhol_sml()` returns why it failed, so "you disabled the bootstrap"
+  (`vimhol = false`) no longer reports as "vimhol.sml not resolved (set
+  config.holdir or config.vimhol)", which pointed at a missing HOL install
+  instead of the switch the user had deliberately flipped. The not-found
+  message now also names the directory that was searched.
+- `:checkhealth hol4nvim` reports `vimhol = false` as a warning naming what it
+  costs (external sessions included, not just `hx`), and reports whether the
+  managed block is actually present in the rc — the check that distinguishes
+  "never set up" from "set up, but this shell predates it".
 
 ## [0.1.0] — 2026-07-04
 

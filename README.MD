@@ -41,6 +41,8 @@ See [ROADMAP.md](ROADMAP.md) for parity status with the upstream vim config.
       abbreviations = false,  -- holabs ASCII->unicode insert abbreviations
       shell_rc = nil,         -- rc file :HolExternalSetup writes to; else
                               -- derived from $SHELL (or pass a path to it)
+      auto_shell_rc = false,  -- true keeps that block current on setup(),
+                              -- so external hol works without the command
       completion = {          -- insert-mode completion (needs nvim-cmp)
         enabled = true,       -- master switch (:HolCompletionToggle at runtime)
         auto_setup = true,    -- register + add the source to hol4script's cmp
@@ -110,6 +112,15 @@ block is written **only** when you run the command — never on plugin load —
 between markers, so re-running updates it in place and deleting the block
 removes it cleanly. Start (or restart) hol, or `source` the file, and it takes
 effect.
+
+Set `auto_shell_rc = true` to skip the command: `setup()` then writes and
+updates that same block itself, so the plugin is configured for external
+sessions as soon as it loads. It stays off by default because writing to a
+shell rc should be something you asked for — the flag *is* that request, made
+once in your config instead of once per command. The write is idempotent, so
+running it on every load is a no-op once the block is correct, and it follows
+your HOL if the paths ever change. What it cannot do is affect shells that are
+already open: the first time, you still need a new terminal and a new `hol`.
 
 After that, every `hol` you start attaches Vimhol and `hl`/`hs`/… reach it —
 no per-session paste. **No `~/.hol-config.sml` is created**: the loader lives
@@ -265,6 +276,29 @@ Each injection is best-effort: if a grammar's parser is not built, that span
 simply stays opaque. `holterm` is deliberately a tokeniser, not a full parser
 — HOL's concrete term syntax is user-extensible, so no fixed grammar could
 parse arbitrary terms, and highlighting does not need to.
+
+### Recolouring the theory header
+
+The new-style header keywords are captured apart from the names they
+introduce, so `Ancestors` never renders as just another imported theory:
+
+| token | tree-sitter | regex tier |
+| --- | --- | --- |
+| `Theory` | `@keyword.directive` | `HOLHeaderKey` (→ `Include`) |
+| `Ancestors`, `Libs` | `@keyword.import` | `HOLHeaderKey` (→ `Include`) |
+| the names under them | `@module` | `HOLHeaderName` (→ `Identifier`) |
+
+If your colorscheme renders those alike anyway (some collapse `@keyword.*`
+into one colour), set them yourself — filetype-scoped, so nothing else moves:
+
+```lua
+vim.api.nvim_set_hl(0, "@keyword.import.holscript", { link = "Include" })
+vim.api.nvim_set_hl(0, "@keyword.directive.holscript", { link = "Include" })
+vim.api.nvim_set_hl(0, "@module.holscript", { link = "Identifier" })
+```
+
+`:Inspect` on a token reports the captures actually applied to it, which is
+the quickest way to see what your scheme is doing.
 
 ### Known limitations of the regex tier
 

@@ -587,10 +587,17 @@ Phase 9 complete ✅
 
     The rc is derived from `$SHELL` (`~/.zshrc`, `~/.bashrc`, fish
     `config.fish`), overridable via the `shell_rc` option or a
-    `:HolExternalSetup <path>` argument. Writing is **opt-in**: only the
-    explicit command touches a shell rc --- never `setup()`. The block sits
-    between markers so re-running rewrites it in place (idempotent, current
+    `:HolExternalSetup <path>` argument. Writing is **opt-in**: `setup()` never
+    touches a shell rc unless asked, either by the explicit command or by
+    `auto_shell_rc = true` (default `false`), which makes `setup()` maintain the
+    block itself for users who would rather not run a command at all. The block
+    sits between markers so re-running rewrites it in place (idempotent, current
     paths) and deleting the block undoes it cleanly.
+
+    Note the irreducible step: an rc cannot reach shells that are already
+    running, so the first setup always costs one new terminal and one new `hol`
+    no matter how it was written. Attaching a *live* session is only possible by
+    pasting the guarded `use` line (`repl.external_recipe`) into it.
 
     The loader is **machine-agnostic** by construction: `$HOME` is read at
     hol-runtime (no home path baked in) and `vimhol.sml` is resolved from
